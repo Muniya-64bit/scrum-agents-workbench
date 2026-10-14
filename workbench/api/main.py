@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from workbench.agents.registry import AGENTS
 from workbench.db import models as m
 from workbench.db import repo
 from workbench.db.session import get_session, init_db
@@ -57,7 +58,7 @@ def get_project(project_id: int, db: Session = Depends(get_session)):
 def advance(project_id: int, db: Session = Depends(get_session)):
     _proj(db, project_id)
     try:
-        return _view(Orchestrator(db).step(project_id))
+        return _view(Orchestrator(db, AGENTS).step(project_id))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
@@ -66,7 +67,7 @@ def advance(project_id: int, db: Session = Depends(get_session)):
 def approve(project_id: int, approved: bool = True, db: Session = Depends(get_session)):
     _proj(db, project_id)
     try:
-        return _view(Orchestrator(db).approve(project_id, approved))
+        return _view(Orchestrator(db, AGENTS).approve(project_id, approved))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
