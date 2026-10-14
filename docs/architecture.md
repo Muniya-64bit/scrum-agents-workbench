@@ -37,7 +37,7 @@ flowchart LR
 2. Implement `build_prompt` (read state via `repo`), `mock_output` (canned dict valid for the
    schema, so tests/dev run with `MOCK_LLM=1`) and `apply` (persist via `Tools` only).
 3. Register it: `Orchestrator(db, agents={"product_owner": ProductOwnerAgent()})`
-   (the default registry in the API should be updated in `workbench/agents/registry.py` when added).
+   by adding it to `AGENTS` in `workbench/agents/registry.py` (the API uses that registry).
 4. Add tests with mock mode.
 
 ## REST API
