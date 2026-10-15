@@ -1,7 +1,7 @@
 """Shared contracts. Every agent's structured output is a pydantic model; the LLM wrapper
 validates against it. Change these only with team agreement (see docs/architecture.md)."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ROLES = ["product_owner", "scrum_master", "architect", "developer", "qa", "devops"]
 
@@ -52,3 +52,47 @@ class FileOut(BaseModel):
 
 class CodeOutput(AgentOutput):  # Developer / Architect / QA / DevOps write files
     files: list[FileOut] = []
+
+
+MERMAID_TYPES = ("flowchart", "graph", "sequenceDiagram", "classDiagram", "erDiagram",
+                 "stateDiagram", "stateDiagram-v2")
+
+
+def _check_mermaid(text: str) -> str:
+    """Reject diagrams that do not start with a Mermaid diagram type, so the LLM retries."""
+    first = text.strip().split(maxsplit=1)[0] if text.strip() else ""
+    if first not in MERMAID_TYPES:
+        raise ValueError(f"Mermaid diagram must start with one of {', '.join(MERMAID_TYPES)}")
+    return text.strip()
+
+
+class DiagramOut(BaseModel):
+    name: str = Field(description="Short kebab-case name, e.g. components, data-model")
+    mermaid: str = Field(description="Mermaid source, no ``` fences")
+
+    @field_validator("mermaid")
+    @classmethod
+    def _mermaid(cls, v: str) -> str:
+        return _check_mermaid(v)
+
+
+class ArchitectureOutput(AgentOutput):  # Architect, sprint 0
+    overview: str = Field(description="Markdown: tech stack, components, key decisions")
+    diagrams: list[DiagramOut] = Field(min_length=1)
+    api_spec: str = Field(description="OpenAPI 3 YAML")
+
+
+class StoryDesignOut(BaseModel):
+    story_id: int
+    notes: str = Field(description="Markdown: what changes in the design for this story")
+    diagram: str = Field("", description="Optional Mermaid diagram, no ``` fences")
+    api_spec: str = Field("", description="Optional OpenAPI 3 YAML snippet (paths only)")
+
+    @field_validator("diagram")
+    @classmethod
+    def _diagram(cls, v: str) -> str:
+        return _check_mermaid(v) if v.strip() else ""
+
+
+class DesignDeltaOutput(AgentOutput):  # Architect, per sprint
+    designs: list[StoryDesignOut] = []

@@ -5,6 +5,9 @@ Replace a StubAgent by adding the real agent here, e.g.
     AGENTS["product_owner"] = ProductOwnerAgent()
 Roles not listed fall back to StubAgent."""
 
+from workbench.agents.architect import ArchitectAgent
 from workbench.agents.base import BaseAgent
 
-AGENTS: dict[str, BaseAgent] = {}
+AGENTS: dict[str, BaseAgent] = {
+    "architect": ArchitectAgent(),
+}
