@@ -55,4 +55,4 @@ Poll with the last `id` you saw.
 
 Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `agent_started`,
 `agent_finished`, `epic_created`, `story_created`, `task_created`, `task_updated`,
-`artifact_created`, `bug_reported`.
+`artifact_created`, `artifact_linked`, `design_skipped`, `design_missing`, `bug_reported`.

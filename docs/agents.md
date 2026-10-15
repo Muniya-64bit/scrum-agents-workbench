@@ -84,3 +84,19 @@ def test_po_creates_backlog(db):
 - Never write to the database directly; use `Tools` so the event log stays complete.
 - Keep the output schema small. Smaller schemas fail validation less often.
 - Real runs are cached in `.cache/llm/`. Delete that folder to force fresh calls.
+
+## Architect
+`ArchitectAgent` (`workbench/agents/architect.py`) runs in two phases and delegates by
+`task["phase"]`:
+
+| Phase | Handler | Output | Artifacts |
+|---|---|---|---|
+| backlog | `SystemDesigner` | `ArchitectureOutput` | `architecture` overview, three `diagram`s (components, data-model, main-flow) and an `api_spec` (OpenAPI 3 YAML), each traced to every backlog story with relation `architecture` |
+| execution | `DesignDelta` | `DesignDeltaOutput` | Per sprint story: `design` notes, optional `diagram` and `api_spec` snippet, traced to that story |
+
+- Diagrams are raw Mermaid. The schema rejects text that does not start with a Mermaid diagram
+  type, so a bad diagram triggers an LLM retry.
+- A story counts as designed once it has a `design` trace link, so later sprints only design new
+  stories. With nothing to design, no LLM call is made (`design_skipped` event).
+- Story ids the LLM invents are dropped; stories it skips get a `design_missing` event.
+- `Tools.link_artifact(artifact_id, story_ids, relation)` traces one artifact to many stories.
