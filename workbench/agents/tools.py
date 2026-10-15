@@ -13,6 +13,11 @@ class Tools:
     def log(self, kind: str, message: str = "", **payload):
         return repo.log_event(self.db, self.project_id, self.agent, kind, message, **payload)
 
+    def set_vision(self, vision: str) -> m.Project:
+        p = repo.update(self.db, repo.get(self.db, m.Project, self.project_id), vision=vision)
+        self.log("vision_set", vision)
+        return p
+
     def create_epic(self, title: str, description: str = "") -> m.Epic:
         e = m.Epic(project_id=self.project_id, title=title, description=description)
         e = repo.add(self.db, e)
