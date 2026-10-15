@@ -24,6 +24,7 @@ ceremonies.
 - [Testing and linting](#testing-and-linting)
 - [Roadmap](#roadmap)
 - [Team and workflow](#team-and-workflow)
+- [Documentation](#documentation)
 
 ## Features
 - Six role-based agents: Product Owner, Scrum Master, Architect, Developer, QA, DevOps
@@ -157,7 +158,8 @@ Set in `.env` (copy from `.env.example`).
 | POST | `/projects/{id}/approve` | Clear a human gate |
 | GET | `/projects/{id}/events?after=<id>` | Activity feed |
 
-Backlog, sprint, task, artifact and traceability endpoints are planned (issue #13).
+Full reference with examples: [docs/api.md](docs/api.md). Backlog, sprint, task, artifact and
+traceability endpoints are planned (issue #13).
 
 ## Project structure
 ```
@@ -174,14 +176,8 @@ frontend/         Web UI (planned)
 ```
 
 ## Developing an agent
-1. Subclass `BaseAgent` in `workbench/agents/<role>.py`. Set `role`, `system_prompt` and
-   `output_schema`.
-2. Implement `build_prompt`, `mock_output` (a valid canned dict) and `apply`. State changes go
-   through the `Tools` API only, so every action is logged.
-3. Register it in `AGENTS` in `workbench/agents/registry.py`.
-4. Add tests that run with `MOCK_LLM=1`.
-
-More detail is in [docs/architecture.md](docs/architecture.md).
+Subclass `BaseAgent`, register it in `workbench/agents/registry.py`, and test it in mock mode.
+The full guide with a worked example is in [docs/agents.md](docs/agents.md).
 
 ## Testing and linting
 ```bash
@@ -211,3 +207,15 @@ PO and SM agents, Architect and Developer agents, QA and DevOps agents, backend 
 and frontend. Branch from `main` as `feat/<issue>-name`, open a pull request that references
 the issue, and get one review. See [CONTRIBUTING.md](CONTRIBUTING.md). Our own stand-ups and
 retrospectives are in [docs/scrum](docs/scrum).
+
+## Documentation
+| Document | Contents |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Components, state machine, data model, design decisions |
+| [docs/development.md](docs/development.md) | Setup, workflow, conventions, troubleshooting |
+| [docs/agents.md](docs/agents.md) | How to build an agent |
+| [docs/api.md](docs/api.md) | REST API reference |
+| [docs/scrum](docs/scrum/README.md) | Our stand-ups and retrospectives |
+
+## License
+No license has been chosen yet. Until one is added, all rights are reserved by the authors.

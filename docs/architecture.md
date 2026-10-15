@@ -1,59 +1,95 @@
 # Architecture
 
-Multi-agent CASE workbench: a user submits a product idea; LLM agents playing Scrum roles take it
-through the SDLC in sprints, producing artifacts (backlog, designs, code, tests, release) with
-human approval at the ceremonies.
+## Purpose
+The workbench takes a product idea through the SDLC using LLM agents that play Scrum roles.
+Agents work in sprints, store everything in a shared database, and pause for human approval at
+the sprint planning and sprint review ceremonies.
 
+## Components
 ```mermaid
 flowchart LR
-  UI[React UI] -->|REST + SSE| API[FastAPI]
-  API --> ORCH[Orchestrator<br/>Scrum state machine]
-  ORCH --> AG[Agents: PO, SM, Architect, Developer, QA, DevOps]
+  UI[Web UI] -->|REST| API[FastAPI]
+  API --> ORCH[Orchestrator]
+  ORCH --> AG[Agents]
   AG -->|Tools API| DB[(SQLite)]
-  AG --> LLM[LLMClient -> Claude API]
+  AG --> LLM[LLMClient]
+  LLM --> CLAUDE[Claude API]
   AG --> WS[Sandbox workspace + git]
   API --> DB
 ```
 
-## Layout
-| Path | Purpose |
-|---|---|
-| `workbench/schemas.py` | Shared pydantic contracts for agent outputs |
-| `workbench/db/` | SQLAlchemy models, session, repository helpers |
-| `workbench/llm/client.py` | `LLMClient.complete_json()` – validated JSON, retries, cache, mock |
-| `workbench/agents/base.py` | `BaseAgent` (subclass this), `StubAgent` |
-| `workbench/agents/tools.py` | `Tools` – the only way agents mutate state; each call logs an Event |
-| `workbench/orchestrator/engine.py` | Phases, gates, agent registry |
-| `workbench/api/main.py` | REST API |
+| Component | Location | Responsibility |
+|---|---|---|
+| API | `workbench/api/main.py` | HTTP interface, input validation, error mapping |
+| Orchestrator | `workbench/orchestrator/engine.py` | Phase order, approval gates, deciding which agents run |
+| Agents | `workbench/agents/` | One class per Scrum role; turn project state into LLM prompts and apply results |
+| Tools API | `workbench/agents/tools.py` | The only way agents change state; every call writes an Event |
+| LLM client | `workbench/llm/client.py` | Calls Claude, validates JSON against a schema, retries, caches, mock mode |
+| Data layer | `workbench/db/` | SQLAlchemy models, sessions, query helpers |
+| Contracts | `workbench/schemas.py` | Pydantic models for agent outputs |
+
+The web UI (`frontend/`) and the server-sent events stream are not built yet. See issues
+#13 to #15.
 
 ## State machine
-`idea -> backlog -> sprint_planning* -> execution -> review* -> retro -> release -> done`
-(`*` = pauses for human approval; `POST /projects/{id}/approve`).
-`PHASE_AGENTS` in `engine.py` maps each phase to the agent roles that run.
+Gates pause the run until a human calls the approve endpoint.
 
-## How to write an agent (workstreams 2–4)
-1. Subclass `BaseAgent` in `workbench/agents/<role>.py`; set `role`, `system_prompt`,
-   `output_schema` (add new schemas to `schemas.py`).
-2. Implement `build_prompt` (read state via `repo`), `mock_output` (canned dict valid for the
-   schema, so tests/dev run with `MOCK_LLM=1`) and `apply` (persist via `Tools` only).
-3. Register it: `Orchestrator(db, agents={"product_owner": ProductOwnerAgent()})`
-   by adding it to `AGENTS` in `workbench/agents/registry.py` (the API uses that registry).
-4. Add tests with mock mode.
+```mermaid
+stateDiagram-v2
+  [*] --> idea
+  idea --> backlog
+  backlog --> sprint_planning
+  sprint_planning --> execution: human approves
+  execution --> review
+  review --> retro: human approves
+  retro --> release
+  release --> done
+  done --> [*]
+```
 
-## REST API
-| Method | Path | Notes |
-|---|---|---|
-| POST | `/projects` | `{name, idea}` |
-| GET | `/projects/{id}` | phase, awaiting_approval |
-| POST | `/projects/{id}/advance` | run next phase (409 if awaiting approval) |
-| POST | `/projects/{id}/approve?approved=true` | clear the gate |
-| GET | `/projects/{id}/events?after=<id>` | activity feed (poll; SSE planned, issue #13) |
-| *planned* | `/projects/{id}/backlog`, `/sprints`, `/tasks`, `/artifacts`, `/trace` | issue #13 |
+`PHASE_AGENTS` in `engine.py` maps each phase to the agent roles that run in it:
+
+| Phase | Agents |
+|---|---|
+| backlog | product_owner, architect |
+| sprint_planning (gate) | scrum_master |
+| execution | architect, developer, qa |
+| review (gate) | scrum_master |
+| retro | scrum_master |
+| release | devops |
+
+Roles without a registered agent fall back to `StubAgent`, which logs and does nothing.
 
 ## Data model
-Project → Epic → UserStory → Task; Sprint ↔ UserStory; Artifact (+ TraceLink story→artifact);
-Bug; Event (append-only log). See `workbench/db/models.py`.
+```mermaid
+erDiagram
+  PROJECT ||--o{ EPIC : has
+  PROJECT ||--o{ SPRINT : has
+  PROJECT ||--o{ ARTIFACT : has
+  PROJECT ||--o{ EVENT : logs
+  EPIC ||--o{ USER_STORY : contains
+  SPRINT ||--o{ USER_STORY : includes
+  USER_STORY ||--o{ TASK : splits_into
+  USER_STORY ||--o{ BUG : has
+  USER_STORY ||--o{ TRACE_LINK : traced_by
+  ARTIFACT ||--o{ TRACE_LINK : linked_in
+```
 
-## Conventions
-Agents never write free text to the DB; outputs are schema-validated. Dev with `MOCK_LLM=1`;
-responses from real runs are cached in `.cache/llm/`.
+- `UserStory.acceptance_criteria` is a list of Given/When/Then strings. QA turns these into tests.
+- `TraceLink` ties a story to the artifacts (design, code, test) that satisfy it.
+- `Event` is append-only. It is the source for the activity feed and for report metrics.
+
+## Design decisions
+| Decision | Reason |
+|---|---|
+| Agents change state only through `Tools` | One audit trail, and no free text written to the database |
+| Agent output is validated against a pydantic schema | Bad LLM output is retried or rejected instead of corrupting state |
+| `MOCK_LLM=1` by default | Development and CI cost nothing and are deterministic |
+| SQLite | No setup for a three-day project; models are portable to Postgres |
+| Agents registered by role in one dict | Teammates add agents without editing the orchestrator |
+
+## Known limitations
+- Rejecting an approval (`approved=false`) clears the gate and logs the rejection, but does not
+  re-run the phase yet.
+- Real Claude calls have not been exercised end to end; the code path is covered only in mock mode.
+- There is no authentication. Run it locally only.
