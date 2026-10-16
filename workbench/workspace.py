@@ -64,6 +64,43 @@ class Workspace:
         self._git(*GIT_AUTHOR, "commit", "-q", "-m", message)
         return self._git("rev-parse", "HEAD")
 
+    def head(self) -> str | None:
+        """The sha of the current commit, or None when there is no commit yet."""
+        if not (self.path / ".git").exists():
+            return None
+        try:
+            return self._git("rev-parse", "HEAD")
+        except subprocess.CalledProcessError:
+            return None
+
+    def _tag_sha(self, name: str) -> str | None:
+        try:
+            return self._git("rev-parse", "--verify", "-q", f"{name}^{{commit}}")
+        except subprocess.CalledProcessError:
+            return None
+
+    def tag(self, name: str, message: str = "") -> str:
+        """Create an annotated tag on HEAD and return the sha it points to. An existing tag is
+        left alone (its sha is returned), so tagging a release twice is harmless."""
+        existing = self._tag_sha(name)
+        if existing:
+            return existing
+        self._git(*GIT_AUTHOR, "-c", "tag.gpgsign=false", "tag", "-a", name, "-m",
+                  message or name)
+        return self._tag_sha(name) or ""
+
+    def log_since(self, tag: str | None) -> list[str]:
+        """Commit subjects after `tag`, newest first. No tag, or an unknown one: all commits."""
+        if not (self.path / ".git").exists():
+            return []
+        args = ["log", "--format=%s"]
+        if tag and self._tag_sha(tag):
+            args.append(f"{tag}..HEAD")
+        try:
+            return self._git(*args).splitlines()
+        except subprocess.CalledProcessError:  # no commits yet
+            return []
+
     def history(self) -> list[str]:
         """Commit subjects, newest first."""
         if not (self.path / ".git").exists():
