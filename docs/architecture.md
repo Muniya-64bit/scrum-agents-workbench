@@ -61,6 +61,12 @@ stateDiagram-v2
 
 Roles without a registered agent fall back to `StubAgent`, which logs and does nothing.
 
+The release phase runs `ReleaseAgent`, which wraps the DevOps agent and ends every sprint with
+a versioned release: notes in `releases/v0.N.0.md`, a git tag in the sandbox repository, a
+`release` artifact traced to the completed stories and a `release_created` event (docs/agents.md,
+"Release step"). Artifacts of kind `release` therefore include the DevOps files and one
+`Release vX.Y.Z` notes artifact per sprint.
+
 ## Process improvement loop
 Each sprint is one Plan-Do-Check-Act cycle. The retrospective turns measured results into typed
 process changes (`ProcessChanges`), and the next sprint is planned with them. Nothing is stored in

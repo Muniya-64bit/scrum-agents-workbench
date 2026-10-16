@@ -23,6 +23,8 @@ All bodies are JSON. There is no authentication; run locally only.
 | GET | `/artifacts/{id}` | One artifact with content and linked story ids |
 | GET | `/projects/{id}/bugs?status=` | Bugs filed against the project's stories |
 | GET | `/projects/{id}/traceability` | Story -> design -> code -> test table with test results |
+| GET | `/projects/{id}/releases` | One release per finished sprint (`v0.N.0`) with its notes artifact |
+| GET | `/projects/{id}/process` | The sprint's process levers and the process planned for the next sprint |
 | GET | `/projects/{id}/metrics` | GQM metrics per sprint, project totals, cost |
 | GET | `/sprints/{id}/burndown` | Burndown series and ideal line of one sprint |
 
@@ -124,13 +126,14 @@ The change is logged as a `task_updated` event with agent `human`. An invalid st
 
 ## Traceability
 `GET /projects/1/traceability` returns one row per backlog story. Artifacts are grouped by kind:
-`architecture`, `diagram` and `api_spec` go in `design`; `code` and `test` keep their names;
+`architecture`, `diagram` and `api_spec` go in `design`; `code`, `test` and `release` keep their
+names (`release` holds the `Release vX.Y.Z` notes of the sprints that released the story);
 anything else goes in `other`. The other fields summarise the story's quality state.
 ```json
 [{"story_id": 2, "title": "Add todo", "status": "sprint",
   "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": "",
               "version": 1}],
-  "code": [], "test": [], "other": [],
+  "code": [], "test": [], "release": [], "other": [],
   "sprint_number": 1, "tests_passed": 2, "tests_failed": 0, "last_test_ok": true,
   "open_bugs": 0, "ac_count": 2, "test_count": 2, "complete": false}]
 ```
@@ -142,6 +145,30 @@ anything else goes in `other`. The other fields summarise the story's quality st
 | `ac_count` | Acceptance criteria of the story |
 | `test_count` | Test functions in the latest version of each test file traced to the story |
 | `complete` | The story has at least one design, one code and one test artifact |
+
+## Releases
+`GET /projects/1/releases` lists the releases, oldest first. Each sprint ends with one release
+(see "Release step" in [agents.md](agents.md)); `artifact_id` is the release notes artifact, open
+it with `GET /artifacts/{artifact_id}`. Unknown project: 404.
+```json
+[{"artifact_id": 21, "version": "v0.1.0", "sprint_id": 5, "sprint_number": 1,
+  "created_at": "2026-10-17T10:00:00", "story_ids": [2, 3], "sha": "0123456789abcdef..."}]
+```
+
+## Process
+`GET /projects/1/process` returns the levers of the latest sprint and the ones the next sprint will
+use once the retrospective's changes are applied (`next_changes` lists `[old, new]` pairs for the
+levers that change, `{}` when nothing changes). Before any sprint, `current` and `next` are the
+defaults. Unknown project: 404.
+```json
+{"current": {"capacity": 10, "max_fix_retries": 3, "test_first": false, "guidelines": []},
+ "current_sprint_number": 1,
+ "next": {"capacity": 7, "max_fix_retries": 3, "test_first": true,
+          "guidelines": ["Write the acceptance tests first and make them pass before committing"]},
+ "next_changes": {"capacity": [10, 7], "test_first": [false, true],
+                  "guidelines": [[], ["Write the acceptance tests first and make them pass before committing"]]},
+ "next_reason": "Commit to last sprint's velocity (yesterday's weather); ..."}
+```
 
 ## Metrics
 `GET /projects/1/metrics` returns the GQM metrics (definitions in [metrics.md](metrics.md)).

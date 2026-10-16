@@ -174,7 +174,9 @@ Set in `.env` (copy from `.env.example`).
 | GET / PATCH | `/projects/{id}/tasks`, `/tasks/{id}` | List tasks, move a task on the board |
 | GET | `/projects/{id}/artifacts`, `/artifacts/{id}` | Design, code, test and release artifacts |
 | GET | `/projects/{id}/bugs` | Bugs from QA |
-| GET | `/projects/{id}/traceability` | Story -> design -> code -> test |
+| GET | `/projects/{id}/traceability` | Story -> design -> code -> test -> release |
+| GET | `/projects/{id}/releases` | Versioned release per sprint |
+| GET | `/projects/{id}/process` | Process levers now and for the next sprint |
 
 Full reference with examples: [docs/api.md](docs/api.md).
 

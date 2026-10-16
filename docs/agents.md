@@ -198,6 +198,34 @@ gate. It uses the same per-project `Workspace` as Developer and QA.
 - In real-model mode, Docker is built when available. Mock-mode runs skip the external build so
   tests remain deterministic. Success, failure and skipped builds are recorded as events.
 
+## Release step
+Every sprint ends with a versioned release. The registered `devops` agent is `ReleaseAgent`
+(`workbench/agents/release.py`), which wraps the DevOps agent above as its builder:
+`AGENTS["devops"] = ReleaseAgent(builder=DevOpsAgent())`. To use another builder, pass any
+`BaseAgent`; with `builder=None` only the versioned part runs.
+
+What `ReleaseAgent` adds on top of the DevOps agent, in order:
+
+1. **Version** `v0.<sprint number>.0` for the current sprint.
+2. The builder runs (Dockerfile, CI workflow, `RELEASE_NOTES.md`, commit `Prepare release`).
+3. **Release notes** from `release_notes(db, project_id, sprint, version, ws)`, built from the
+   database and the git history without an LLM, written to `releases/<version>.md` and committed as
+   `Release <version>`.
+4. **Git tag** `<version>` (annotated) in the sandbox repository.
+5. A `release` artifact `Release <version>`, **traced** to every story completed in the sprint
+   (relation `release`, shown on the Traceability page), and the event
+   `release_created {version, sha, story_ids, artifact_id, sprint_id}`.
+
+The notes have these sections, in order: title and date, `Completed stories`, `Fixed bugs`,
+`Known issues`, `Carried over`, `Process used` (the four levers), `Metrics` (velocity, commitment
+reliability, first-pass yield, test pass rate) and `Commits` (subjects since the previous version's
+tag, or all of them for `v0.1.0`).
+
+- **Idempotent:** a release whose `Release <version>` artifact exists logs `release_exists` and
+  changes nothing. With no sprint the step logs `release_skipped`.
+- The agent logs `agent_started` / `agent_finished` itself (`llm_mode` is `none`, zero usage) so
+  it shows in the activity feed without counting as an LLM call.
+
 ## Agents that run in several phases
 The Scrum Master runs in sprint planning, review and retro, and each needs a different prompt and
 output schema. `ScrumMasterAgent` (`workbench/agents/scrum_master.py`) is the one registered agent;

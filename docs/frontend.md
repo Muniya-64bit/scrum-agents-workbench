@@ -29,7 +29,7 @@ CI runs typecheck, tests and build on every pull request.
 | `/projects/:id/board` | Kanban board for the latest sprint (or every task before planning) |
 | `/projects/:id/activity` | Live activity feed with agent filters, and the approval card at a gate |
 | `/projects/:id/metrics` | GQM dashboard: KPI tiles, burndown, velocity, quality, AI cost and the GQM goals ([metrics.md](metrics.md)) |
-| `/projects/:id/traceability` | Story → design → code → tests matrix with results, gaps and an artifact viewer. Filters (`?sprint=`, `?status=`, `?gaps=1`) are kept in the URL |
+| `/projects/:id/traceability` | Story → design → code → tests → release matrix with results, gaps and an artifact viewer. Filters (`?sprint=`, `?status=`, `?gaps=1`) are kept in the URL |
 | `/inbox` | Approval inbox: every project waiting at a gate, across projects |
 
 Every project page shows the phase bar and the phase controls: **Start &lt;next phase&gt;**, or
