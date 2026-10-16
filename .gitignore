@@ -8,3 +8,4 @@ __pycache__/
 workspaces/
 node_modules/
 dist/
+*.tsbuildinfo

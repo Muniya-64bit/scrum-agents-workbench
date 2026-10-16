@@ -137,6 +137,16 @@ curl localhost:8000/projects/1/events
 
 To use the real model, set `ANTHROPIC_API_KEY` and `MOCK_LLM=0` in `.env`.
 
+### Web UI
+Requires Node.js 22. Keep `make run` going in one terminal, then in another:
+```bash
+make ui-setup   # npm ci in frontend/
+make seed       # optional: a demo project with a backlog and a sprint board
+make ui         # http://localhost:5173
+```
+The UI has a project list, the backlog and a Kanban sprint board, with buttons to advance phases
+and approve gates. See [docs/frontend.md](docs/frontend.md).
+
 ## Configuration
 Set in `.env` (copy from `.env.example`).
 
@@ -178,7 +188,8 @@ workbench/
   schemas.py      Shared agent output contracts
 tests/            pytest suite
 docs/             Architecture and Scrum process evidence
-frontend/         Web UI (planned)
+frontend/         Web UI (React + Vite)
+scripts/          Demo seed and sample scripts
 ```
 
 ## Developing an agent
@@ -221,6 +232,7 @@ retrospectives are in [docs/scrum](docs/scrum).
 | [docs/development.md](docs/development.md) | Setup, workflow, conventions, troubleshooting |
 | [docs/agents.md](docs/agents.md) | How to build an agent |
 | [docs/api.md](docs/api.md) | REST API reference |
+| [docs/frontend.md](docs/frontend.md) | Web UI: running it, structure, design tokens |
 | [docs/scrum](docs/scrum/README.md) | Our stand-ups and retrospectives |
 
 ## License
