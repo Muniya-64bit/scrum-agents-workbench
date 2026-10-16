@@ -30,6 +30,7 @@ from workbench.workspace import UnsafePath, Workspace
 FILES_CHARS = 12000  # budget for code shown to the LLM
 MAX_BUGS_PER_RUN = 5  # one bug per failing test, capped so a broken app does not flood the board
 PYTEST_INI = "[pytest]\ntestpaths = tests\npythonpath = .\n"  # keeps pytest off the parent config
+GITIGNORE = "__pycache__/\n*.pyc\n.pytest_cache/\n"
 
 SYSTEM_PROMPT = """You are a QA engineer on a Scrum team. Write pytest tests for ONE user story.
 
@@ -205,8 +206,9 @@ class QAAgent(BaseAgent):
                 continue
             if ws.write(path, f.content):
                 changed[path] = f.content
-        if changed:
-            ws.write("pytest.ini", PYTEST_INI)  # scaffolded with the first tests, same commit
+        if changed:  # scaffolded with the first tests, in the same commit
+            ws.write("pytest.ini", PYTEST_INI)
+            ws.write(".gitignore", GITIGNORE)
 
         sha = ws.commit(f"Tests for story #{story.id}: {story.title}") if changed else None
         if sha is None:

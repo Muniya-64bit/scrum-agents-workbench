@@ -40,6 +40,7 @@ def run_pytest(workspace: Path, targets: Sequence[str] = ("tests",),
                timeout: int = TIMEOUT_SECONDS) -> TestResult:
     """Run pytest on `targets` inside `workspace`. Never raises on test failures."""
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    env["PYTHONDONTWRITEBYTECODE"] = "1"  # no __pycache__ in the workspace (it is a git repo)
     with tempfile.TemporaryDirectory() as tmp:
         report = Path(tmp) / "report.xml"
         cmd = [sys.executable, "-m", "pytest", *targets, "-q", "--tb=short", "-p",

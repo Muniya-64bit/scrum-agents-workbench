@@ -124,6 +124,17 @@ def test_writes_tests_from_criteria_and_traces_them(db: Session, project: m.Proj
     assert ("test", path) in links and ("code", f"app/features/story_{coded.id}.py") in links
 
 
+def test_test_runs_leave_no_bytecode_in_the_workspace(db: Session, project: m.Project,
+                                                      coded: m.UserStory, monkeypatch):
+    """Regression: .pyc files made the Developer crash reading the workspace (seen in CI)."""
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)  # CI does not set it
+    QAAgent().run(db, project.id, EXECUTION)
+    files = Workspace(project.id).files()
+    assert not [f for f in files if "__pycache__" in f or f.endswith(".pyc")]
+    assert ".gitignore" in files
+    DeveloperAgent().run(db, project.id, {**EXECUTION, "story_id": coded.id})  # still readable
+
+
 def test_passing_tests_finish_the_qa_task(db: Session, project: m.Project, coded: m.UserStory):
     QAAgent().run(db, project.id, EXECUTION)
     db.refresh(coded)
