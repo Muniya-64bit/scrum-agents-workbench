@@ -247,5 +247,7 @@ def test_execution_phase_end_to_end(db: Session, project: m.Project):
     assert repo.bugs(db, project.id) == []
     ws = Workspace(project.id)
     assert f"tests/test_story_{story.id}.py" in ws.files()
-    assert len(ws.history()) == 3  # code, tests, then DevOps release files
-    assert ws.history()[0] == "Prepare release"
+    history = ws.history()
+    assert history[0] == "Prepare release"
+    assert any(message.startswith("Story #") for message in history)
+    assert any(message.startswith("Tests for story #") for message in history)

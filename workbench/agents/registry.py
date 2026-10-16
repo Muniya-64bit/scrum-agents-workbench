@@ -5,6 +5,7 @@ Replace a StubAgent by adding the real agent here, e.g.
     AGENTS["product_owner"] = ProductOwnerAgent()
 Roles not listed fall back to StubAgent."""
 
+from workbench.agents.architect import ArchitectAgent
 from workbench.agents.base import BaseAgent
 from workbench.agents.developer import DeveloperAgent
 from workbench.agents.devops import DevOpsAgent
@@ -17,6 +18,7 @@ _developer = DeveloperAgent()
 AGENTS: dict[str, BaseAgent] = {
     "product_owner": ProductOwnerAgent(),
     "scrum_master": ScrumMasterAgent(),
+    "architect": ArchitectAgent(),
     "developer": _developer,
     "qa": QAAgent(developer=_developer),  # QA asks the Developer to fix the bugs it files
     "devops": DevOpsAgent(),

@@ -150,3 +150,9 @@ def events_since(db: Session, project_id: int, after_id: int = 0) -> list[m.Even
         .order_by(m.Event.id)
     )
     return list(db.scalars(q))
+
+
+def stories_without_design(db: Session, project_id: int) -> list[m.UserStory]:
+    """Sprint stories that have no per-story design artifact yet (relation `design`)."""
+    designed = set(db.scalars(select(m.TraceLink.story_id).where(m.TraceLink.relation == "design")))
+    return [s for s in backlog(db, project_id) if s.sprint_id is not None and s.id not in designed]
