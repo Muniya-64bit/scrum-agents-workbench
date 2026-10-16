@@ -248,6 +248,7 @@ def test_execution_phase_end_to_end(db: Session, project: m.Project):
     ws = Workspace(project.id)
     assert f"tests/test_story_{story.id}.py" in ws.files()
     history = ws.history()
-    assert history[0] == "Prepare release"
+    assert history[0].startswith("Release v0.")  # the release step tags what DevOps prepared
+    assert "Prepare release" in history
     assert any(message.startswith("Story #") for message in history)
     assert any(message.startswith("Tests for story #") for message in history)

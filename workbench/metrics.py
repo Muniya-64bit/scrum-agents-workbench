@@ -593,7 +593,8 @@ def project_metrics(db: Session, project_id: int) -> dict:
     planned = {sid for s in ctx.sprints for sid in _plan(ctx, s)["story_ids"]}
     closed = [s for s in sprints if s["closed"]]
     code = _latest_artifacts_by_path(repo.artifacts(db, project_id, "code"), ("code",))
-    modes = sorted({str(e.payload["llm_mode"]) for e in finished if e.payload.get("llm_mode")})
+    modes = sorted({str(e.payload["llm_mode"]) for e in finished
+                    if e.payload.get("llm_mode") not in (None, "", "none")})
     un_in, un_out = unattributed.get("input_tokens", 0), unattributed.get("output_tokens", 0)
     return {
         "project": {
