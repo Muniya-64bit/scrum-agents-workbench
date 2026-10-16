@@ -86,7 +86,15 @@ The same loop is the Quality Improvement Paradigm (QIP) from the course:
 | Package | The retro's changes stored in `Sprint.retro` and recorded in the next `sprint_planned.process` |
 
 Unfinished stories return to the backlog at the retro (`story_carried_over`) and are planned first.
-The levers and their bounds are in docs/agents.md.
+The levers and their bounds are in docs/agents.md. Agents read the sprint's process from the
+database, so no lever needs the orchestrator:
+
+| Lever | Read by | Effect |
+|---|---|---|
+| `capacity` | Scrum Master planning | Points the sprint may commit to |
+| `max_fix_retries` | Developer, QA | Fix attempts per bug; QA's test/fix loop length |
+| `test_first` | Developer, QA | QA writes the tests before the Developer codes; QA also runs stories whose tests never ran |
+| `guidelines` | `BaseAgent.run` (all agents but the Product Owner) | Working agreements appended to the prompt |
 
 ## Data model
 ```mermaid

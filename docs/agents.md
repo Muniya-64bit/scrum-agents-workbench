@@ -29,6 +29,18 @@ sequenceDiagram
   A->>T: log agent_finished (LLM usage, duration)
 ```
 
+**Working agreements.** Before the LLM call, `BaseAgent.run` appends the team's working
+agreements to the prompt when the process has any (Product Owner excluded: it runs before any
+retrospective). The block is the last thing in the prompt:
+
+```
+Team working agreements (from the last retrospective):
+- Write the acceptance tests first and make them pass before committing
+```
+
+The agreements come from `process.effective_process(db, project_id, task["phase"])`: in sprint
+planning the process the retro just decided, in every other phase the sprint's own process.
+
 ## What `run()` logs
 `agent_started`, then `agent_finished` with the usage of this run, so the cost and speed of the
 process can be measured (see [metrics.md](metrics.md)):
@@ -127,7 +139,13 @@ the project's sandbox workspace (`workbench/workspace.py`): a folder with its ow
 - **Unsafe paths** (absolute, `..`, `.git`) are not written; each gets a `file_rejected` event.
 - **Bug fixes:** every attempt increments `Bug.retries`. A commit marks the bug `fixed`; QA reopens
   it if the tests still fail. With no change the bug stays open (`bug_fix_failed`). After
-  `MAX_FIX_RETRIES` (3) attempts the bug is skipped with a `bug_retry_limit` event.
+  the sprint's `max_fix_retries` attempts (`MAX_FIX_RETRIES`, 3, when the process does not say
+  otherwise) the bug is skipped with a `bug_retry_limit` event. The limit is resolved once per run
+  from `task["max_fix_retries"]`, else `process.effective_process(...)`; QA passes its value on.
+- **Test-first.** When the sprint's process has `test_first` on and the story has no code and no
+  tests, the Developer first calls `self.test_writer` (set by `QAAgent`), then builds the story.
+  The prompt gains "Tests you must make pass (do not edit them):" with the latest test files,
+  outside the file budget.
 - With nothing to build, no LLM call is made (`code_skipped` event).
 - Tests use an autouse fixture in `tests/conftest.py` that points `WORKSPACES_DIR` at a temp dir.
 
@@ -142,12 +160,31 @@ sprint story that has code it:
    limit and no `ANTHROPIC_API_KEY` in its environment. The workspace is a plain directory, not a
    container, so this guards against accidents rather than hostile code.
 3. files one `Bug` per failing test (no duplicates), and sets QA tasks to `testing` or `done`.
-4. while bugs are open and have attempts left, calls the Developer with `{"story_id": id}` and
-   tests again. The limit is `MAX_FIX_RETRIES` (3) attempts per bug. A bug the Developer marked
-   fixed that still fails is reopened; after the limit it stays open for a human.
+4. while bugs are open and have attempts left, calls the Developer with `{"story_id": id,
+   "max_fix_retries": n}` and tests again. The limit is the sprint's `max_fix_retries`
+   (`MAX_FIX_RETRIES`, 3, by default) attempts per bug. A bug the Developer marked fixed that
+   still fails is reopened; after the limit it stays open for a human.
 
 Every run logs a `test_run` event (`passed`, `failed`, `ok`) for the metrics views.
 `QAAgent(developer=None)` only reports bugs and never reruns the Developer.
+
+**Test-first flow.** `QAAgent.__init__` sets `developer.test_writer = self.write_tests`. With the
+`test_first` lever on, the Developer asks QA for the tests before it codes:
+
+```mermaid
+sequenceDiagram
+  participant D as Developer
+  participant Q as QA
+  participant W as Workspace
+  D->>Q: write_tests(story) (no code, no tests yet)
+  Q->>W: commit "Tests for story #n" (from acceptance criteria and design)
+  Q-->>D: tests_written_first
+  D->>W: implement the story so the tests pass, commit "Story #n"
+  Q->>W: run the tests (stories with tests but no test_run are picked up)
+```
+
+In that flow the QA prompt says "There is no implementation yet" and lists the story's design and
+API spec instead of the code.
 
 ## DevOps agent
 `DevOpsAgent` (`workbench/agents/devops.py`) runs in the release phase after QA and the review
