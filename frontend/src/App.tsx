@@ -10,6 +10,7 @@ import { InboxPage } from "./pages/InboxPage";
 import { MetricsPage } from "./pages/MetricsPage";
 import { ProjectLayout } from "./pages/ProjectLayout";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { TraceabilityPage } from "./pages/TraceabilityPage";
 
 export function App() {
   return (
@@ -23,6 +24,7 @@ export function App() {
           <Route path="board" element={<BoardPage />} />
           <Route path="activity" element={<ActivityPage />} />
           <Route path="metrics" element={<MetricsPage />} />
+          <Route path="traceability" element={<TraceabilityPage />} />
         </Route>
         <Route
           path="*"

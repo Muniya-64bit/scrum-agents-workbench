@@ -12,6 +12,7 @@ import {
   IconChart,
   IconFolder,
   IconInbox,
+  IconLink,
   IconList,
   IconMoon,
   IconSun,
@@ -64,6 +65,9 @@ export function AppShell() {
               </NavLink>
               <NavLink to={`/projects/${projectId}/metrics`} className="nav-link">
                 <IconChart /> <span>Metrics</span>
+              </NavLink>
+              <NavLink to={`/projects/${projectId}/traceability`} className="nav-link">
+                <IconLink /> <span>Traceability</span>
               </NavLink>
             </>
           )}
