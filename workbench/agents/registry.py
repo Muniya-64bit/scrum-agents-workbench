@@ -7,6 +7,10 @@ Roles not listed fall back to StubAgent."""
 
 from workbench.agents.architect import ArchitectAgent
 from workbench.agents.base import BaseAgent
+from workbench.agents.developer import DeveloperAgent
+
+AGENTS: dict[str, BaseAgent] = {
+    "developer": DeveloperAgent(),
 from workbench.agents.product_owner import ProductOwnerAgent
 from workbench.agents.scrum_master import ScrumMasterAgent
 

@@ -67,9 +67,10 @@ class Tools:
         return t
 
     def write_artifact(self, kind: str, name: str, content: str, story_id: int | None = None,
-                       path: str = "") -> m.Artifact:
+                       path: str = "", version: int = 1) -> m.Artifact:
         a = repo.add(self.db, m.Artifact(project_id=self.project_id, kind=kind, name=name,
-                                         content=content, path=path, created_by=self.agent))
+                                         content=content, path=path, version=version,
+                                         created_by=self.agent))
         if story_id:
             repo.add(self.db, m.TraceLink(story_id=story_id, artifact_id=a.id, relation=kind))
         self.log("artifact_created", name, artifact_id=a.id, artifact_kind=kind)
@@ -80,6 +81,13 @@ class Tools:
         self.log("bug_reported", description, bug_id=b.id)
         return b
 
+    def record_fix_attempt(self, bug_id: int, fixed: bool) -> m.Bug:
+        """Count one Developer attempt at a bug; `fixed` marks it fixed until QA re-tests."""
+        b = repo.get(self.db, m.Bug, bug_id)
+        b = repo.update(self.db, b, retries=b.retries + 1, status="fixed" if fixed else b.status)
+        self.log("bug_fixed" if fixed else "bug_fix_failed", b.description, bug_id=b.id,
+                 story_id=b.story_id, retries=b.retries)
+        return b
     def link_artifact(self, artifact_id: int, story_ids: list[int], relation: str) -> None:
         """Trace one artifact to several stories (e.g. sprint-0 architecture -> whole backlog)."""
         for sid in story_ids:

@@ -83,7 +83,8 @@ es.onmessage = (msg) => console.log(JSON.parse(msg.data));
 
 Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `agent_started`,
 `agent_finished`, `epic_created`, `story_created`, `task_created`, `task_updated`,
-`artifact_created`, `bug_reported`.
+`artifact_created`, `bug_reported`, `code_committed`, `code_unchanged`, `code_skipped`,
+`file_rejected`, `bug_fixed`, `bug_fix_failed`, `bug_retry_limit`.
 
 ## Backlog
 `GET /projects/1/backlog`

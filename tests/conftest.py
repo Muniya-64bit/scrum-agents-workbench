@@ -15,3 +15,11 @@ def db():
     with sessionmaker(bind=engine, expire_on_commit=False)() as s:
         yield s
     Base.metadata.drop_all(engine)
+
+
+@pytest.fixture(autouse=True)
+def _workspaces(tmp_path, monkeypatch):
+    """Generated code goes to a temp dir, never to ./workspaces."""
+    from workbench import config
+
+    monkeypatch.setattr(config, "WORKSPACES_DIR", str(tmp_path / "workspaces"))
