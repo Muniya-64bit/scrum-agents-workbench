@@ -45,6 +45,18 @@ class SprintPlanOutput(AgentOutput):  # Scrum Master
     tasks: list[TaskOut] = []
 
 
+class StandupOutput(AgentOutput):  # Scrum Master, from task states
+    yesterday: list[str] = []
+    today: list[str] = []
+    blockers: list[str] = []
+
+
+class RetroOutput(AgentOutput):  # Scrum Master
+    went_well: list[str] = []
+    went_wrong: list[str] = []
+    actions: list[str] = Field(default=[], description="Improvements for the next sprint")
+
+
 class FileOut(BaseModel):
     path: str
     content: str

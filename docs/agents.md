@@ -64,6 +64,11 @@ AGENTS["product_owner"] = ProductOwnerAgent()
 |---|---|
 | `create_epic(title, description)` | New epic |
 | `create_story(epic_id, **fields)` | New user story |
+| `set_vision(vision)` | Save the product vision on the project |
+| `create_sprint(goal, capacity)` | New active sprint, numbered automatically |
+| `add_story_to_sprint(sprint_id, story_id)` | Move a story into a sprint |
+| `snapshot_burndown(sprint_id)` | Record points remaining (feeds the burndown data) |
+| `save_retro(sprint_id, retro)` | Store went well / went wrong / actions and close the sprint |
 | `create_task(story_id, title, assignee)` | New task |
 | `update_task(task_id, status)` | `todo`, `doing`, `testing` or `done` |
 | `write_artifact(kind, name, content, story_id, path, version)` | Save an artifact and link it to a story |
@@ -138,3 +143,16 @@ gate. It uses the same per-project `Workspace` as Developer and QA.
 - Changed files become `release` artifacts and are committed together as `Prepare release`.
 - In real-model mode, Docker is built when available. Mock-mode runs skip the external build so
   tests remain deterministic. Success, failure and skipped builds are recorded as events.
+
+## Agents that run in several phases
+The Scrum Master runs in sprint planning, review and retro, and each needs a different prompt and
+output schema. `ScrumMasterAgent` (`workbench/agents/scrum_master.py`) is the one registered agent;
+it reads `task["phase"]` and delegates to a handler per phase (`SprintPlanner`, `StandupAgent`,
+`RetroAgent`). Use the same pattern for any agent that serves more than one phase.
+
+- **Capacity is enforced in code.** `_select_stories` drops unknown ids and anything over capacity,
+  because the LLM only proposes the sprint.
+- **Retro feeds the next sprint.** `SprintPlanner.build_prompt` adds the previous sprint's retro
+  actions to the prompt.
+- **Burndown** comes from `burndown_snapshot` events written at each stand-up. Read it with
+  `repo.burndown(db, sprint)`.

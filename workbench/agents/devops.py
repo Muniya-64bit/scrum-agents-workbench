@@ -47,7 +47,7 @@ def _completed_stories(db: Session, project_id: int) -> list[m.UserStory]:
     return [
         story
         for story in repo.backlog(db, project_id)
-        if story.tasks and all(task.status == "done" for task in story.tasks)
+        if repo.story_is_done(story)
     ]
 
 
