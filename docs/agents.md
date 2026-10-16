@@ -286,15 +286,3 @@ The retrospective changes how the next sprint runs, not only what is written in 
   stories. With nothing to design, no LLM call is made (`design_skipped` event).
 - Story ids the LLM invents are dropped; stories it skips get a `design_missing` event.
 - `Tools.link_artifact(artifact_id, story_ids, relation)` traces one artifact to many stories.
-## Agents that run in several phases
-The Scrum Master runs in sprint planning, review and retro, and each needs a different prompt and
-output schema. `ScrumMasterAgent` (`workbench/agents/scrum_master.py`) is the one registered agent;
-it reads `task["phase"]` and delegates to a handler per phase (`SprintPlanner`, `StandupAgent`,
-`RetroAgent`). Use the same pattern for any agent that serves more than one phase.
-
-- **Capacity is enforced in code.** `_select_stories` drops unknown ids and anything over capacity,
-  because the LLM only proposes the sprint.
-- **Retro feeds the next sprint.** `SprintPlanner.build_prompt` adds the previous sprint's retro
-  actions to the prompt.
-- **Burndown** comes from `burndown_snapshot` events written at each stand-up. Read it with
-  `repo.burndown(db, sprint)`.
