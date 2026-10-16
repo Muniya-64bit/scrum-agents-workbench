@@ -1,6 +1,7 @@
-import { screen } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { MockEventSource } from "../test/eventSource";
 import { project } from "../test/fixtures";
 import { mockApi, renderApp } from "../test/utils";
 
@@ -55,5 +56,27 @@ describe("phase controls", () => {
     renderApp("/projects/1/backlog");
     expect(await screen.findByText("Completed")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Start/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("live updates", () => {
+  it("refreshes the header when a phase event arrives", async () => {
+    let phase = "idea";
+    mockApi({
+      ...backlogRoute,
+      "GET /projects/1/events": [],
+      "GET /projects/1": () => ({ body: { ...project, phase } }),
+    });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByRole("button", { name: "Start Backlog" })).toBeInTheDocument();
+
+    phase = "backlog"; // another tab advanced the project
+    act(() =>
+      MockEventSource.latest().emit({
+        id: 9, agent: "orchestrator", kind: "phase_started", message: "backlog", payload: {},
+        at: new Date().toISOString(),
+      }),
+    );
+    expect(await screen.findByRole("button", { name: "Start Planning" })).toBeInTheDocument();
   });
 });

@@ -28,9 +28,9 @@ flowchart LR
 | Data layer | `workbench/db/` | SQLAlchemy models, sessions, query helpers |
 | Contracts | `workbench/schemas.py` | Pydantic models for agent outputs |
 
-The web UI (`frontend/`, React + Vite) shows projects, the backlog and the sprint board, and
-drives the phases through the REST API. The live activity feed is planned under #15. The API
-streams the event log to clients as Server-Sent Events (`workbench/api/sse.py`).
+The web UI (`frontend/`, React + Vite) shows projects, the backlog, the sprint board, a live
+activity feed and an approval inbox, and drives the phases through the REST API. The API streams
+the event log to clients as Server-Sent Events (`workbench/api/sse.py`).
 
 ## State machine
 Gates pause the run until a human calls the approve endpoint.

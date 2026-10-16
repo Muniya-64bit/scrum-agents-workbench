@@ -27,6 +27,8 @@ CI runs typecheck, tests and build on every pull request.
 | `/` | Project list and the new-project form |
 | `/projects/:id/backlog` | Vision, stats, epics and stories with Given/When/Then criteria |
 | `/projects/:id/board` | Kanban board for the latest sprint (or every task before planning) |
+| `/projects/:id/activity` | Live activity feed with agent filters, and the approval card at a gate |
+| `/inbox` | Approval inbox: every project waiting at a gate, across projects |
 
 Every project page shows the phase bar and the phase controls: **Start &lt;next phase&gt;**, or
 **Approve / Reject** when the project waits at a gate.
@@ -34,15 +36,36 @@ Every project page shows the phase bar and the phase controls: **Start &lt;next 
 On the board, drag a card to another column or use the status menu on the card (keyboard
 friendly). The card moves at once; if saving fails it moves back and an error toast explains why.
 
+## Live updates
+Each project page opens one Server-Sent Events connection (`useEventStream`): it loads the history
+from `GET /projects/{id}/events`, then listens on `/projects/{id}/stream?after=<last id>`. The
+browser's `EventSource` reconnects by itself and resumes after the last event it saw.
+
+- New events appear at the top of the Activity feed, with the agent's avatar and a readable sentence
+  (`lib/events.ts` turns event kinds into text).
+- Pages (backlog, board) reload shortly after a burst of events, so you see the agents' work
+  without refreshing. Phase and gate events refresh the header and phase bar at once.
+- While a phase runs, the header shows what the agents are doing right now.
+- The sidebar's **Inbox** count updates as soon as a gate opens or is decided, and every 10 s.
+
+## Approvals
+At sprint planning and sprint review the project waits for a human. The approval card shows what
+the agents produced (sprint goal, stories, points, tasks done), with **Approve** and **Reject…**.
+Rejecting asks for an optional reason, which is saved as the message of the `rejected` event
+(`POST /projects/{id}/approve?approved=false&comment=...`).
+
 ## Structure
 ```
 frontend/src/
   api/          client.ts (typed fetch wrapper, ApiError), types.ts (mirrors workbench/api/views.py)
-  components/   AppShell (sidebar), PhaseBar, Toast, ui.tsx (Button, Badge, states), icons
-  lib/          scrum.ts (phase/status/role labels), useResource.ts (data loading), theme.ts
-  pages/        ProjectsPage, ProjectLayout (header + phase controls), BacklogPage, BoardPage
+  components/   AppShell (sidebar), PhaseBar, ActivityFeed, ApprovalCard, Avatar, Toast,
+                ui.tsx (Button, Badge, states), icons
+  lib/          scrum.ts (labels), events.ts (event text, times), useEventStream.ts (SSE),
+                useResource.ts (data loading), usePolling.ts, projectsChanged.ts, theme.ts
+  pages/        ProjectsPage, ProjectLayout (header, phase controls, live stream), BacklogPage,
+                BoardPage, ActivityPage, InboxPage
   styles/       tokens.css (colors, light/dark), app.css
-  test/         fake API (mockApi), render helper, fixtures
+  test/         fake API (mockApi), fake EventSource, render helper, fixtures
 ```
 When you change a response model in `workbench/api/views.py`, update `src/api/types.ts` too.
 

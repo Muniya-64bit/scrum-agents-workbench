@@ -1221,3 +1221,369 @@ details[open] > .story-summary::before {
     scroll-snap-align: start;
   }
 }
+
+/* ---------- Activity feed (#15) ---------- */
+.nav-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--status-testing);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 18px;
+  text-align: center;
+}
+
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--avatar, var(--role-devops));
+  color: #fff;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.avatar-product_owner {
+  --avatar: var(--role-product_owner);
+}
+
+.avatar-scrum_master {
+  --avatar: var(--role-scrum_master);
+}
+
+.avatar-architect {
+  --avatar: var(--role-architect);
+}
+
+.avatar-developer {
+  --avatar: var(--role-developer);
+}
+
+.avatar-qa {
+  --avatar: var(--role-qa);
+}
+
+.avatar-devops {
+  --avatar: var(--role-devops);
+}
+
+.avatar-human {
+  --avatar: var(--accent);
+}
+
+.avatar-orchestrator {
+  --avatar: var(--surface-muted);
+  color: var(--text-muted);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.feed-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.chip:first-child {
+  padding-left: 12px;
+}
+
+.chip:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-todo);
+}
+
+.live-live .live-dot {
+  background: var(--status-done);
+  box-shadow: 0 0 0 0 var(--status-done);
+  animation: pulse 2s infinite;
+}
+
+.live-reconnecting .live-dot,
+.live-connecting .live-dot {
+  background: var(--status-testing);
+}
+
+.live-error .live-dot {
+  background: var(--danger);
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(22 163 74 / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgb(22 163 74 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(22 163 74 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-live .live-dot {
+    animation: none;
+  }
+}
+
+.feed {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.feed-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 16px;
+  animation: feed-in 0.25s ease-out;
+}
+
+.feed-item + .feed-item::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 29px;
+  height: 20px;
+  border-left: 1px solid var(--border);
+}
+
+.feed-body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.feed-text {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+}
+
+.feed-text strong {
+  margin-right: 2px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.feed-done .feed-text {
+  color: var(--status-done);
+}
+
+.feed-danger .feed-text {
+  color: var(--danger);
+}
+
+.feed-testing .feed-text {
+  color: var(--status-testing);
+}
+
+.feed-time,
+.feed-divider time {
+  flex: none;
+  padding-top: 4px;
+  color: var(--text-subtle);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.feed-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0;
+  padding: 6px 16px;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.feed-divider::after {
+  content: "";
+  flex: 1;
+  order: 1;
+  border-top: 1px solid var(--border);
+}
+
+.feed-divider time {
+  order: 2;
+  padding: 0;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.feed-more {
+  align-self: center;
+}
+
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-item {
+    animation: none;
+  }
+}
+
+.working-now {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 380px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.working-now > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.working-now strong {
+  color: var(--text);
+}
+
+/* ---------- Approval card ---------- */
+.approval {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border-color: var(--status-testing);
+  border-left-width: 3px;
+}
+
+.approval-title {
+  margin: 8px 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.approval-title a {
+  color: var(--text);
+}
+
+.approval-title a:hover {
+  color: var(--accent-text);
+}
+
+.approval-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.approval-summary .spinner {
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+.approval-stories {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.approval-stories li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.approval-stories .points {
+  margin-left: auto;
+}
+
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.approval-reject {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .working-now {
+    display: none;
+  }
+
+  .nav-count {
+    margin-left: 4px;
+  }
+
+  .feed-item + .feed-item::before {
+    display: none;
+  }
+}
