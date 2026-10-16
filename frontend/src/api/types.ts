@@ -78,3 +78,13 @@ export interface SprintDetail extends Sprint {
   stories: Story[];
   tasks: Task[];
 }
+
+/** One entry of the append-only event log (GET /projects/{id}/events and the SSE stream). */
+export interface ActivityEvent {
+  id: number;
+  agent: string;
+  kind: string;
+  message: string;
+  payload: Record<string, unknown>;
+  at: string;
+}

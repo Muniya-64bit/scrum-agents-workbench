@@ -172,7 +172,20 @@ def test_event_stream_yields_events_after_cursor(api):
         return [frame async for frame in gen]
 
     frames = asyncio.run(collect())
+    assert frames[0] == "retry: 3000\n: connected\n\n"  # sent at once so the client sees "open"
+    frames = frames[1:]
     assert len(frames) == len(events) - 2
     first = frames[0]
     assert first.startswith(f"id: {events[2].id}\ndata: ") and first.endswith("\n\n")
     assert '"kind":"story_created"' in first
+
+
+def test_reject_with_comment_is_logged(api):
+    c, factory = api
+    pid = c.post("/projects", json={"name": "n", "idea": "i"}).json()["id"]
+    c.post(f"/projects/{pid}/advance")
+    c.post(f"/projects/{pid}/advance")  # sprint planning gate
+    r = c.post(f"/projects/{pid}/approve", params={"approved": False, "comment": "Too big"})
+    assert r.status_code == 200 and r.json()["awaiting_approval"] is False
+    last = c.get(f"/projects/{pid}/events").json()[-1]
+    assert (last["kind"], last["message"], last["agent"]) == ("rejected", "Too big", "human")

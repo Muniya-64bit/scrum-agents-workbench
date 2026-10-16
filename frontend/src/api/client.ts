@@ -1,4 +1,12 @@
-import type { Backlog, Project, Sprint, SprintDetail, Task, TaskStatus } from "./types";
+import type {
+  ActivityEvent,
+  Backlog,
+  Project,
+  Sprint,
+  SprintDetail,
+  Task,
+  TaskStatus,
+} from "./types";
 
 /** All requests go to /api; the Vite dev server proxies that to the FastAPI backend. */
 export const API_BASE = "/api";
@@ -47,8 +55,13 @@ export const api = {
   createProject: (name: string, idea: string) =>
     request<Project>("/projects", { method: "POST", body: JSON.stringify({ name, idea }) }),
   advance: (id: number) => request<Project>(`/projects/${id}/advance`, { method: "POST" }),
-  approve: (id: number, approved: boolean) =>
-    request<Project>(`/projects/${id}/approve?approved=${approved}`, { method: "POST" }),
+  approve: (id: number, approved: boolean, comment = "") =>
+    request<Project>(
+      `/projects/${id}/approve?approved=${approved}&comment=${encodeURIComponent(comment)}`,
+      { method: "POST" },
+    ),
+  events: (id: number, after = 0) =>
+    request<ActivityEvent[]>(`/projects/${id}/events?after=${after}`),
 
   backlog: (id: number) => request<Backlog>(`/projects/${id}/backlog`),
   sprints: (id: number) => request<Sprint[]>(`/projects/${id}/sprints`),
@@ -57,3 +70,8 @@ export const api = {
   updateTask: (taskId: number, status: TaskStatus) =>
     request<Task>(`/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status }) }),
 };
+
+/** URL for the live event stream (Server-Sent Events). */
+export function streamUrl(projectId: number, after: number): string {
+  return `${API_BASE}/projects/${projectId}/stream?after=${after}`;
+}

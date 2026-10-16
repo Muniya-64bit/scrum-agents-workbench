@@ -144,8 +144,8 @@ make ui-setup   # npm ci in frontend/
 make seed       # optional: a demo project with a backlog and a sprint board
 make ui         # http://localhost:5173
 ```
-The UI has a project list, the backlog and a Kanban sprint board, with buttons to advance phases
-and approve gates. See [docs/frontend.md](docs/frontend.md).
+The UI has a project list, the backlog, a Kanban sprint board, a live agent activity feed and an
+approval inbox for the sprint planning and review gates. See [docs/frontend.md](docs/frontend.md).
 
 ## Configuration
 Set in `.env` (copy from `.env.example`).
