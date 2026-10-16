@@ -7,6 +7,7 @@ import { ActivityPage } from "./pages/ActivityPage";
 import { BacklogPage } from "./pages/BacklogPage";
 import { BoardPage } from "./pages/BoardPage";
 import { InboxPage } from "./pages/InboxPage";
+import { MetricsPage } from "./pages/MetricsPage";
 import { ProjectLayout } from "./pages/ProjectLayout";
 import { ProjectsPage } from "./pages/ProjectsPage";
 
@@ -21,6 +22,7 @@ export function App() {
           <Route path="backlog" element={<BacklogPage />} />
           <Route path="board" element={<BoardPage />} />
           <Route path="activity" element={<ActivityPage />} />
+          <Route path="metrics" element={<MetricsPage />} />
         </Route>
         <Route
           path="*"

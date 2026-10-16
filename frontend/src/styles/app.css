@@ -1587,3 +1587,270 @@ details[open] > .story-summary::before {
     display: none;
   }
 }
+
+/* ---------- Metrics ---------- */
+.metrics-intro,
+.metrics-mode {
+  margin: 0;
+  font-size: 13px;
+}
+
+.metrics-mode {
+  margin-top: 2px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.kpi-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.delta {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta-good {
+  color: var(--status-done);
+}
+
+.delta-bad {
+  color: var(--danger);
+}
+
+.delta-flat {
+  color: var(--text-muted);
+}
+
+.metrics-panel {
+  padding: 16px 20px;
+}
+
+.metrics-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.metrics-panel-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.metrics-panel-head .metrics-panel-title {
+  margin: 0;
+}
+
+.metrics-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+
+.chart {
+  position: relative;
+}
+
+.chart-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.chart-empty {
+  padding: 24px 0;
+  text-align: center;
+}
+
+.chart-point {
+  outline: none;
+  cursor: pointer;
+}
+
+.chart-point:focus-visible circle,
+.chart-point:focus-visible rect {
+  stroke: var(--text);
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 3px var(--accent));
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+  white-space: nowrap;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.swatch-line {
+  height: 3px;
+  width: 16px;
+}
+
+.swatch-dash {
+  width: 16px;
+  height: 0;
+  border-top: 2px dashed var(--text-subtle);
+  border-radius: 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.data-table thead th {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.data-table tbody th,
+.data-table tfoot th {
+  font-weight: 600;
+}
+
+.data-table tfoot th,
+.data-table tfoot td {
+  border-top: 2px solid var(--border-strong);
+  border-bottom: 0;
+  font-weight: 600;
+}
+
+.data-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.gqm-summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.gqm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gqm-goal h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.gqm-question {
+  margin: 0 0 8px 16px;
+}
+
+.gqm-question h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gqm-question ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.gqm-id {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chart-point rect,
+  .chart-point circle {
+    transition: opacity 0.15s ease;
+  }
+}

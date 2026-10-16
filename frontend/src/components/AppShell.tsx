@@ -6,7 +6,16 @@ import { applyTheme, effectiveTheme, type Theme } from "../lib/theme";
 import { useOnProjectsChanged } from "../lib/projectsChanged";
 import { usePolling } from "../lib/usePolling";
 import { useResource } from "../lib/useResource";
-import { IconActivity, IconBoard, IconFolder, IconInbox, IconList, IconMoon, IconSun } from "./icons";
+import {
+  IconActivity,
+  IconBoard,
+  IconChart,
+  IconFolder,
+  IconInbox,
+  IconList,
+  IconMoon,
+  IconSun,
+} from "./icons";
 
 /** Sidebar + main area. On narrow screens the sidebar becomes a top bar. */
 export function AppShell() {
@@ -52,6 +61,9 @@ export function AppShell() {
               </NavLink>
               <NavLink to={`/projects/${projectId}/activity`} className="nav-link">
                 <IconActivity /> <span>Activity</span>
+              </NavLink>
+              <NavLink to={`/projects/${projectId}/metrics`} className="nav-link">
+                <IconChart /> <span>Metrics</span>
               </NavLink>
             </>
           )}
