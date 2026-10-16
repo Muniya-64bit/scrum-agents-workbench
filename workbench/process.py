@@ -102,6 +102,13 @@ def effective_process(db: Session, project_id: int, phase: str) -> ProcessConfig
     return current_process(db, project_id)
 
 
+def fix_retry_limit(db: Session, project_id: int, task: dict) -> int:
+    """Developer attempts per bug in force for this run: the task's value (QA passes it on to
+    the Developer), else the sprint's process, else the default."""
+    return (task.get("max_fix_retries")
+            or effective_process(db, project_id, task.get("phase", "execution")).max_fix_retries)
+
+
 def suggest_process_changes(m: dict, cfg: ProcessConfig) -> ProcessChanges:
     """Rule-based advisor: sprint metrics -> proposed levers. Used by the mock retro and shown
     to the live model as a suggestion."""
