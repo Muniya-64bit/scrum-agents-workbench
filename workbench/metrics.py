@@ -620,3 +620,32 @@ def project_metrics(db: Session, project_id: int) -> dict:
         "gqm": GQM,
         "pricing": pricing(),
     }
+
+
+# --- traceability matrix details ---------------------------------------------------------------
+
+
+def trace_details(db: Session, project_id: int) -> dict[int, dict]:
+    """Per story: sprint number, latest test result, open bugs, AC and test counts, completeness."""
+    ctx = _Ctx.load(db, project_id)
+    number = {s.id: s.number for s in ctx.sprints}
+    last_run: dict[int, m.Event] = {}
+    for e in ctx.events:
+        if e.kind == "test_run" and (e.payload or {}).get("story_id") is not None:
+            last_run[e.payload["story_id"]] = e
+    open_bugs = Counter(b.story_id for b in repo.bugs(db, project_id, "open"))
+    details = {}
+    for sid, story in ctx.stories.items():
+        run = last_run.get(sid)
+        payload = run.payload if run else {}
+        details[sid] = {
+            "sprint_number": number.get(story.sprint_id),
+            "tests_passed": int(payload.get("passed") or 0),
+            "tests_failed": int(payload.get("failed") or 0),
+            "last_test_ok": bool(payload.get("ok")) if run else None,
+            "open_bugs": open_bugs.get(sid, 0),
+            "ac_count": len(story.acceptance_criteria or []),
+            "test_count": _story_test_count(ctx, sid),
+            "complete": _is_complete(ctx.arts_by_story.get(sid, [])),
+        }
+    return details

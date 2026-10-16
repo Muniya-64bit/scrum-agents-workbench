@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from workbench import metrics
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
 from workbench.api.sse import event_stream, event_view
@@ -13,8 +14,10 @@ from workbench.api.views import (
     ArtifactView,
     BacklogView,
     BugView,
+    BurndownView,
     EpicView,
     EventView,
+    ProjectMetricsView,
     ProjectView,
     SprintDetailView,
     SprintView,
@@ -184,7 +187,8 @@ def list_bugs(project_id: int, status: str | None = None, db: Session = Depends(
 def traceability(project_id: int, db: Session = Depends(get_session)):
     """Story -> design -> code -> test, one row per backlog story in priority order."""
     _proj(db, project_id)
-    rows = {s.id: TraceRow(story_id=s.id, title=s.title, status=s.status)
+    details = metrics.trace_details(db, project_id)
+    rows = {s.id: TraceRow(story_id=s.id, title=s.title, status=s.status, **details[s.id])
             for s in repo.backlog(db, project_id)}
     for link, a in repo.trace_links(db, project_id):
         row = rows.get(link.story_id)
@@ -198,6 +202,20 @@ def traceability(project_id: int, db: Session = Depends(get_session)):
         else:
             row.other.append(item)
     return list(rows.values())
+
+
+# --- Metrics ----------------------------------------------------------------------------------
+
+@app.get("/sprints/{sprint_id}/burndown", response_model=BurndownView)
+def sprint_burndown(sprint_id: int, db: Session = Depends(get_session)):
+    sprint = _get_or_404(db, m.Sprint, sprint_id, "sprint")
+    return BurndownView.model_validate(metrics.burndown(db, sprint))
+
+
+@app.get("/projects/{project_id}/metrics", response_model=ProjectMetricsView)
+def project_metrics(project_id: int, db: Session = Depends(get_session)):
+    _proj(db, project_id)
+    return ProjectMetricsView.model_validate(metrics.project_metrics(db, project_id))
 
 
 # --- Activity feed ----------------------------------------------------------------------------
