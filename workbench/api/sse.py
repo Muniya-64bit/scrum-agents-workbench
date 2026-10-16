@@ -37,6 +37,9 @@ async def event_stream(
     poll_seconds: float = 1.0,
 ) -> AsyncIterator[str]:
     """Yield SSE frames for events with id > `after` until the client disconnects."""
+    # Send something at once: servers flush the response headers with the first chunk, and the
+    # browser's EventSource only reports "open" once it has them. `retry` sets its reconnect delay.
+    yield "retry: 3000\n: connected\n\n"
     last, idle = after, 0.0
     while not await is_disconnected():
         events = await asyncio.to_thread(_fetch, session_factory, project_id, last)

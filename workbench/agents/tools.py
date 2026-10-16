@@ -100,6 +100,7 @@ class Tools:
         b = repo.update(self.db, repo.get(self.db, m.Bug, bug_id), status="fixed")
         self.log("bug_verified", b.description, bug_id=b.id, story_id=b.story_id)
         return b
+
     def link_artifact(self, artifact_id: int, story_ids: list[int], relation: str) -> None:
         """Trace one artifact to several stories (e.g. sprint-0 architecture -> whole backlog)."""
         for sid in story_ids:

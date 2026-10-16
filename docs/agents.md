@@ -131,6 +131,32 @@ sprint story that has code it:
 
 Every run logs a `test_run` event (`passed`, `failed`, `ok`) for the metrics views.
 `QAAgent(developer=None)` only reports bugs and never reruns the Developer.
+
+## DevOps agent
+`DevOpsAgent` (`workbench/agents/devops.py`) runs in the release phase after QA and the review
+gate. It uses the same per-project `Workspace` as Developer and QA.
+
+- It generates exactly `Dockerfile`, `.github/workflows/ci.yml` and `RELEASE_NOTES.md`; any other
+  LLM-supplied path is rejected.
+- Release notes contain only stories whose tasks are all `done`, so a story is not released until
+  both its Developer and QA work has completed.
+- Changed files become `release` artifacts and are committed together as `Prepare release`.
+- In real-model mode, Docker is built when available. Mock-mode runs skip the external build so
+  tests remain deterministic. Success, failure and skipped builds are recorded as events.
+
+## Agents that run in several phases
+The Scrum Master runs in sprint planning, review and retro, and each needs a different prompt and
+output schema. `ScrumMasterAgent` (`workbench/agents/scrum_master.py`) is the one registered agent;
+it reads `task["phase"]` and delegates to a handler per phase (`SprintPlanner`, `StandupAgent`,
+`RetroAgent`). Use the same pattern for any agent that serves more than one phase.
+
+- **Capacity is enforced in code.** `_select_stories` drops unknown ids and anything over capacity,
+  because the LLM only proposes the sprint.
+- **Retro feeds the next sprint.** `SprintPlanner.build_prompt` adds the previous sprint's retro
+  actions to the prompt.
+- **Burndown** comes from `burndown_snapshot` events written at each stand-up. Read it with
+  `repo.burndown(db, sprint)`.
+
 ## Architect
 `ArchitectAgent` (`workbench/agents/architect.py`) runs in two phases and delegates by
 `task["phase"]`:

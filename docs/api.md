@@ -48,6 +48,9 @@ gate, `awaiting_approval` is `true`.
 ## Approve
 `POST /projects/1/approve?approved=true`
 
+Add `&comment=...` to record a reason, for example when rejecting. It is saved as the message
+of the `approved` or `rejected` event.
+
 | Status | Meaning |
 |---|---|
 | 200 | Gate cleared |
@@ -72,7 +75,8 @@ id: 13
 data: {"id": 13, "agent": "orchestrator", "kind": "phase_started", "message": "backlog", ...}
 ```
 
-Use `?after=<id>` to skip older events. On reconnect, `EventSource` sends `Last-Event-ID`
+The stream starts with a `retry: 3000` line and a `: connected` comment, so clients see it open
+at once. Use `?after=<id>` to skip older events. On reconnect, `EventSource` sends `Last-Event-ID`
 automatically and the stream resumes after that event. A `: keep-alive` comment is sent after
 15 seconds without events.
 
@@ -83,8 +87,12 @@ es.onmessage = (msg) => console.log(JSON.parse(msg.data));
 
 Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `agent_started`,
 `agent_finished`, `epic_created`, `story_created`, `task_created`, `task_updated`,
-`artifact_created`, `bug_reported`, `code_committed`, `code_unchanged`, `code_skipped`,
-`file_rejected`, `bug_fixed`, `bug_fix_failed`, `bug_retry_limit`.
+`artifact_created`, `artifact_linked`, `design_skipped`, `design_missing`, `bug_reported`,
+`code_committed`, `code_unchanged`, `code_skipped`,
+`file_rejected`, `bug_fixed`, `bug_fix_failed`, `bug_retry_limit`, `tests_committed`, `test_run`,
+`tests_skipped`, `tests_missing`, `bug_reopened`, `bug_verified`, `bugs_left_open`,
+`release_file_rejected`, `release_file_missing`, `release_file_unchanged`, `release_committed`,
+`docker_build_skipped`, `docker_build_succeeded`, `docker_build_failed`.
 
 ## Backlog
 `GET /projects/1/backlog`

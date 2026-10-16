@@ -196,5 +196,6 @@ def test_registered_and_runs_in_orchestrator(db: Session, project: m.Project):
     o.step(project.id)  # execution: developer runs, then QA adds its tests
     assert repo.artifacts(db, project.id, "code")
     history = Workspace(project.id).history()
-    assert history[-1].startswith("Story #")  # the Developer's commit is the first one
-    assert len(history) == 2  # plus QA's tests commit
+    developer_commits = [message for message in history if message.startswith("Story #")]
+    qa_commits = [message for message in history if message.startswith("Tests for story #")]
+    assert developer_commits and len(developer_commits) == len(qa_commits)
