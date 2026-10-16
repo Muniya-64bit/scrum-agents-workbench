@@ -19,6 +19,9 @@ class ProjectView(_ORM):
     idea: str
     phase: str
     awaiting_approval: bool
+    # True while the project is at `release` and another sprint will follow (stories left that
+    # fit the next capacity, fewer than MAX_SPRINTS sprints so far); always False otherwise
+    has_more_sprints: bool = False
 
 
 class StoryView(_ORM):
@@ -148,6 +151,55 @@ class ProcessView(BaseModel):
     next: dict
     next_changes: dict
     next_reason: str
+
+
+class ImprovementPlan(BaseModel):
+    process: dict
+    changes_applied: dict
+    reason: str
+
+
+class ImprovementDo(BaseModel):
+    committed_points: int
+    completed_points: int
+
+
+class ImprovementCheck(BaseModel):
+    commitment_reliability: float | None
+    first_pass_yield: float | None
+    test_pass_rate: float | None
+    bugs_reported: int
+    fix_attempts: int
+    est_cost_usd: float
+
+
+class ImprovementDeltas(BaseModel):
+    """Change since the previous sprint; `None` for sprint 1 or when a value is missing."""
+
+    commitment_reliability: float | None
+    first_pass_yield: float | None
+    test_pass_rate: float | None
+    bugs_reported: float | None
+    fix_attempts: float | None
+    est_cost_usd: float | None
+
+
+class ImprovementAct(BaseModel):
+    went_well: list[str]
+    went_wrong: list[str]
+    actions: list[str]
+    proposed_changes: dict
+
+
+class ImprovementRow(BaseModel):
+    """One Plan-Do-Check-Act cycle (one sprint); see docs/metrics.md."""
+
+    sprint_number: int
+    plan: ImprovementPlan
+    do: ImprovementDo
+    check: ImprovementCheck
+    deltas: ImprovementDeltas
+    act: ImprovementAct
 
 
 class EventView(BaseModel):

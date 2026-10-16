@@ -578,6 +578,46 @@ def sprint_metrics(db: Session, sprint: m.Sprint) -> dict:
     return _sprint_metrics(_Ctx.load(db, sprint.project_id), sprint)
 
 
+# --- improvement (PDCA) -----------------------------------------------------------------------
+
+CHECK_KEYS = ("commitment_reliability", "first_pass_yield", "test_pass_rate", "bugs_reported",
+              "fix_attempts", "est_cost_usd")
+
+
+def _delta(curr: float | None, prev: float | None, key: str) -> float | None:
+    if curr is None or prev is None:
+        return None
+    return round(curr - prev, 4 if key == "est_cost_usd" else 3)
+
+
+def improvement_rows(db: Session, project_id: int) -> list[dict]:
+    """One Plan-Do-Check-Act row per sprint: the process used (plan), committed vs completed
+    points (do), the measured results with their change since the previous sprint (check) and the
+    retrospective with the process changes it proposed (act)."""
+    ctx = _Ctx.load(db, project_id)
+    rows, previous = [], None
+    for sprint in ctx.sprints:
+        sm, plan = _sprint_metrics(ctx, sprint), _plan(ctx, sprint)
+        retro = sprint.retro or {}
+        check = {k: sm[k] for k in CHECK_KEYS}
+        rows.append({
+            "sprint_number": sprint.number,
+            "plan": {"process": plan["process"], "changes_applied": plan["process_changes"],
+                     "reason": plan["process_reason"]},
+            "do": {"committed_points": sm["committed_points"],
+                   "completed_points": sm["completed_points"]},
+            "check": check,
+            "deltas": {k: _delta(v, previous[k] if previous else None, k)
+                       for k, v in check.items()},
+            "act": {"went_well": list(retro.get("went_well") or []),
+                    "went_wrong": list(retro.get("went_wrong") or []),
+                    "actions": list(retro.get("actions") or []),
+                    "proposed_changes": dict(retro.get("process_changes") or {})},
+        })
+        previous = check
+    return rows
+
+
 # --- project metrics ---------------------------------------------------------------------------
 
 

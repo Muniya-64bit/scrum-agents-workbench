@@ -17,6 +17,7 @@ from workbench.api.views import (
     BurndownView,
     EpicView,
     EventView,
+    ImprovementRow,
     ProcessView,
     ProjectMetricsView,
     ProjectView,
@@ -71,8 +72,11 @@ def _get_or_404(db: Session, model, id_: int, name: str):
     return obj
 
 
-def _view(p: m.Project) -> ProjectView:
-    return ProjectView.model_validate(p)
+def _view(db: Session, p: m.Project) -> ProjectView:
+    view = ProjectView.model_validate(p)
+    if p.phase == "release":
+        view.has_more_sprints = Orchestrator(db).more_sprints(p.id)
+    return view
 
 
 def _sprint_view(s: m.Sprint) -> SprintView:
@@ -90,24 +94,24 @@ def _by_priority(stories) -> list[StoryView]:
 
 @app.get("/projects", response_model=list[ProjectView])
 def list_projects(db: Session = Depends(get_session)):
-    return [_view(p) for p in repo.list_projects(db)]
+    return [_view(db, p) for p in repo.list_projects(db)]
 
 
 @app.post("/projects", response_model=ProjectView)
 def create_project(body: ProjectIn, db: Session = Depends(get_session)):
-    return _view(repo.create_project(db, body.name, body.idea))
+    return _view(db, repo.create_project(db, body.name, body.idea))
 
 
 @app.get("/projects/{project_id}", response_model=ProjectView)
 def get_project(project_id: int, db: Session = Depends(get_session)):
-    return _view(_proj(db, project_id))
+    return _view(db, _proj(db, project_id))
 
 
 @app.post("/projects/{project_id}/advance", response_model=ProjectView)
 def advance(project_id: int, db: Session = Depends(get_session)):
     _proj(db, project_id)
     try:
-        return _view(Orchestrator(db, AGENTS).step(project_id))
+        return _view(db, Orchestrator(db, AGENTS).step(project_id))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
@@ -118,7 +122,7 @@ def approve(project_id: int, approved: bool = True, comment: str = "",
     """Clear the pending gate. `comment` (e.g. a reason for rejecting) is logged on the event."""
     _proj(db, project_id)
     try:
-        return _view(Orchestrator(db, AGENTS).approve(project_id, approved, comment))
+        return _view(db, Orchestrator(db, AGENTS).approve(project_id, approved, comment))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
@@ -242,6 +246,13 @@ def process_view(project_id: int, db: Session = Depends(get_session)):
 def sprint_burndown(sprint_id: int, db: Session = Depends(get_session)):
     sprint = _get_or_404(db, m.Sprint, sprint_id, "sprint")
     return BurndownView.model_validate(metrics.burndown(db, sprint))
+
+
+@app.get("/projects/{project_id}/improvement", response_model=list[ImprovementRow])
+def improvement(project_id: int, db: Session = Depends(get_session)):
+    """One Plan-Do-Check-Act row per sprint, to show how the process improves."""
+    _proj(db, project_id)
+    return [ImprovementRow.model_validate(r) for r in metrics.improvement_rows(db, project_id)]
 
 
 @app.get("/projects/{project_id}/metrics", response_model=ProjectMetricsView)
