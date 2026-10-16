@@ -58,12 +58,13 @@ class Tools:
 
     def create_task(self, story_id: int, title: str, assignee: str = "") -> m.Task:
         t = repo.add(self.db, m.Task(story_id=story_id, title=title, assignee=assignee))
-        self.log("task_created", title, task_id=t.id)
+        self.log("task_created", title, task_id=t.id, story_id=story_id, assignee=assignee)
         return t
 
     def update_task(self, task_id: int, status: str) -> m.Task:
         t = repo.update(self.db, repo.get(self.db, m.Task, task_id), status=status)
-        self.log("task_updated", f"{t.title} -> {status}", task_id=t.id)
+        self.log("task_updated", f"{t.title} -> {status}", task_id=t.id, status=status,
+                 story_id=t.story_id)
         return t
 
     def write_artifact(self, kind: str, name: str, content: str, story_id: int | None = None,
@@ -78,7 +79,7 @@ class Tools:
 
     def report_bug(self, story_id: int, description: str) -> m.Bug:
         b = repo.add(self.db, m.Bug(story_id=story_id, description=description))
-        self.log("bug_reported", description, bug_id=b.id)
+        self.log("bug_reported", description, bug_id=b.id, story_id=story_id)
         return b
 
     def record_fix_attempt(self, bug_id: int, fixed: bool) -> m.Bug:

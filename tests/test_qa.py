@@ -48,7 +48,7 @@ def _kinds(db: Session, project_id: int) -> list[str]:
 def _fake_llm(monkeypatch, *replies: dict) -> LLMClient:
     llm = LLMClient(mock=False, use_cache=False)
     it = iter(json.dumps(r) for r in replies)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: next(it))
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: next(it))
     return llm
 
 
