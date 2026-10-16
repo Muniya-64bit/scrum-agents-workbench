@@ -42,6 +42,13 @@ class Tools:
         self.log("story_planned", s.title, story_id=s.id, sprint_id=sprint_id)
         return s
 
+    def unplan_story(self, story_id: int, from_sprint_id: int) -> m.UserStory:
+        """Return an unfinished story to the backlog so a later sprint can pick it up."""
+        s = repo.update(self.db, repo.get(self.db, m.UserStory, story_id),
+                        sprint_id=None, status="backlog")
+        self.log("story_carried_over", s.title, story_id=s.id, from_sprint_id=from_sprint_id)
+        return s
+
     def snapshot_burndown(self, sprint_id: int) -> dict:
         """Record points remaining; the burndown chart is built from these events."""
         sprint = repo.get(self.db, m.Sprint, sprint_id)

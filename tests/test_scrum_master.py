@@ -43,7 +43,10 @@ def test_planning_logs_sprint_planned(db: Session, project: m.Project):
     assert event.agent == "scrum_master"
     assert event.payload == {"sprint_id": sprint.id, "number": 1, "capacity": 10,
                              "story_ids": [s.id for s in sprint.stories],
-                             "committed_points": sum(s.points for s in sprint.stories)}
+                             "committed_points": sum(s.points for s in sprint.stories),
+                             "process": {"capacity": 10, "max_fix_retries": 3,
+                                         "test_first": False, "guidelines": []},
+                             "process_changes": {}, "process_reason": ""}
 
 
 def test_planning_respects_capacity(db: Session, project: m.Project):
@@ -129,7 +132,8 @@ def test_retro_actions_are_injected_into_next_sprint_prompt(db: Session, project
     action = repo.current_sprint(db, project.id).retro["actions"][0]
     prompt = SprintPlanner().build_prompt(db, project.id, PLANNING)
     assert action in prompt
-    assert first.title not in prompt  # already planned, so no longer in the backlog list
+    # nothing was finished, so the retro returned the story to the backlog, marked as carried over
+    assert f"{first.title} (carried over)" in prompt
 
 
 def test_first_sprint_prompt_has_no_retro_section(db: Session, project: m.Project):
