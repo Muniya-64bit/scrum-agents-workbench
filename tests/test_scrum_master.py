@@ -36,6 +36,16 @@ def test_planning_creates_sprint_stories_and_tasks(db: Session, project: m.Proje
     assert repo.unplanned_stories(db, project.id) == []
 
 
+def test_planning_logs_sprint_planned(db: Session, project: m.Project):
+    ScrumMasterAgent().run(db, project.id, PLANNING)
+    sprint = repo.current_sprint(db, project.id)
+    event = [e for e in repo.events_since(db, project.id) if e.kind == "sprint_planned"][0]
+    assert event.agent == "scrum_master"
+    assert event.payload == {"sprint_id": sprint.id, "number": 1, "capacity": 10,
+                             "story_ids": [s.id for s in sprint.stories],
+                             "committed_points": sum(s.points for s in sprint.stories)}
+
+
 def test_planning_respects_capacity(db: Session, project: m.Project):
     ScrumMasterAgent().run(db, project.id, {**PLANNING, "capacity": 3})
     sprint = repo.current_sprint(db, project.id)
@@ -49,7 +59,7 @@ def test_planning_ignores_bad_llm_choices(db: Session, project: m.Project, monke
     reply = json.dumps({"goal": "G", "story_ids": [999, first.id, first.id, second.id],
                         "tasks": [{"story_id": first.id, "title": "T", "assignee": "wizard"}]})
     llm = LLMClient(mock=False, use_cache=False)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: reply)
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: reply)
     ScrumMasterAgent(llm).run(db, project.id, {**PLANNING, "capacity": 3})
     sprint = repo.current_sprint(db, project.id)
     assert [s.id for s in sprint.stories] == [first.id]
@@ -61,7 +71,7 @@ def test_story_without_tasks_gets_default_tasks(db: Session, project: m.Project,
     first = repo.backlog(db, project.id)[0]
     reply = json.dumps({"goal": "G", "story_ids": [first.id], "tasks": []})
     llm = LLMClient(mock=False, use_cache=False)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: reply)
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: reply)
     ScrumMasterAgent(llm).run(db, project.id, PLANNING)
     assert len(repo.current_sprint(db, project.id).stories[0].tasks) == 2
 

@@ -97,6 +97,10 @@ Rules:
             for t in titles:
                 tools.create_task(story.id, t.title,
                                   t.assignee if t.assignee in ROLES else "developer")
+        committed = sum(story.points for story in chosen)
+        tools.log("sprint_planned", f"Sprint {sprint.number}: {committed} points committed",
+                  sprint_id=sprint.id, number=sprint.number, story_ids=[s.id for s in chosen],
+                  committed_points=committed, capacity=capacity)
 
 
 class StandupAgent(BaseAgent):
