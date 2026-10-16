@@ -26,8 +26,24 @@ sequenceDiagram
   A->>L: complete_json(system, prompt, schema)
   L-->>A: validated output (or LLMError)
   A->>T: apply() creates stories, tasks, artifacts
-  A->>T: log agent_finished
+  A->>T: log agent_finished (LLM usage, duration)
 ```
+
+## What `run()` logs
+`agent_started`, then `agent_finished` with the usage of this run, so the cost and speed of the
+process can be measured (see [metrics.md](metrics.md)):
+
+| Payload key | Meaning |
+|---|---|
+| `calls`, `input_tokens`, `output_tokens` | Model API calls and tokens of this run (0 in mock mode and on cache hits) |
+| `cache_hits`, `invalid_outputs` | Answers served from `.cache/llm/`; answers that failed schema validation and were retried |
+| `duration_ms`, `model`, `llm_mode` | Wall-clock time; model name; `mock` or `live` |
+| `story_id` | `task["story_id"]` when the run was for one story, else `null` |
+
+Other payload keys added for the metrics: `task_created` has `story_id` and `assignee`;
+`task_updated` has `status` and `story_id`; `bug_reported` has `story_id`. The Scrum Master logs
+`sprint_planned` (`sprint_id`, `number`, `story_ids`, `committed_points`, `capacity`) after
+planning; it marks the start of a sprint for the metrics.
 
 ## Example
 ```python

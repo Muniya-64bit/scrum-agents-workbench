@@ -91,7 +91,7 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
 `code_committed`, `code_unchanged`, `code_skipped`,
 `file_rejected`, `bug_fixed`, `bug_fix_failed`, `bug_retry_limit`, `tests_committed`, `test_run`,
 `tests_skipped`, `tests_missing`, `bug_reopened`, `bug_verified`, `bugs_left_open`,
-`release_file_rejected`, `release_file_missing`, `release_file_unchanged`, `release_committed`,
+`sprint_planned`, `release_file_rejected`, `release_file_missing`, `release_file_unchanged`, `release_committed`,
 `docker_build_skipped`, `docker_build_succeeded`, `docker_build_failed`.
 
 ## Backlog

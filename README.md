@@ -233,6 +233,7 @@ retrospectives are in [docs/scrum](docs/scrum).
 | [docs/agents.md](docs/agents.md) | How to build an agent |
 | [docs/api.md](docs/api.md) | REST API reference |
 | [docs/frontend.md](docs/frontend.md) | Web UI: running it, structure, design tokens |
+| [docs/metrics.md](docs/metrics.md) | GQM goals, questions and metrics, how they are computed, limits |
 | [docs/scrum](docs/scrum/README.md) | Our stand-ups and retrospectives |
 
 ## License
