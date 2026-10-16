@@ -116,6 +116,7 @@ class TraceRow(BaseModel):
     design: list[TraceItem] = []
     code: list[TraceItem] = []
     test: list[TraceItem] = []
+    release: list[TraceItem] = []
     other: list[TraceItem] = []
     sprint_number: int | None = None
     tests_passed: int = 0
@@ -125,6 +126,28 @@ class TraceRow(BaseModel):
     ac_count: int = 0
     test_count: int = 0
     complete: bool = False
+
+
+class ReleaseView(BaseModel):
+    """One `release_created` event joined with its release-notes artifact."""
+
+    artifact_id: int
+    version: str
+    sprint_id: int
+    sprint_number: int | None
+    created_at: datetime
+    story_ids: list[int]
+    sha: str
+
+
+class ProcessView(BaseModel):
+    """The levers of the current sprint and what the last retrospective changes for the next."""
+
+    current: dict
+    current_sprint_number: int | None
+    next: dict
+    next_changes: dict
+    next_reason: str
 
 
 class EventView(BaseModel):

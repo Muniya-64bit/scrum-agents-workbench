@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import metrics
+from workbench import metrics, process
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
 from workbench.api.sse import event_stream, event_view
@@ -17,8 +17,10 @@ from workbench.api.views import (
     BurndownView,
     EpicView,
     EventView,
+    ProcessView,
     ProjectMetricsView,
     ProjectView,
+    ReleaseView,
     SprintDetailView,
     SprintView,
     StoryView,
@@ -197,11 +199,41 @@ def traceability(project_id: int, db: Session = Depends(get_session)):
         item = TraceItem(artifact_id=a.id, name=a.name, kind=a.kind, path=a.path, version=a.version)
         if a.kind in DESIGN_KINDS:
             row.design.append(item)
-        elif a.kind in ("code", "test"):
+        elif a.kind in ("code", "test", "release"):
             getattr(row, a.kind).append(item)
         else:
             row.other.append(item)
     return list(rows.values())
+
+
+@app.get("/projects/{project_id}/releases", response_model=list[ReleaseView])
+def releases(project_id: int, db: Session = Depends(get_session)):
+    """One entry per sprint release, oldest first."""
+    _proj(db, project_id)
+    out = []
+    for e in repo.events_since(db, project_id):
+        if e.kind != "release_created":
+            continue
+        p = e.payload
+        art = repo.get(db, m.Artifact, p.get("artifact_id"))
+        sprint = repo.get(db, m.Sprint, p.get("sprint_id"))
+        out.append(ReleaseView(
+            artifact_id=p["artifact_id"], version=p["version"], sprint_id=p["sprint_id"],
+            sprint_number=sprint.number if sprint else None,
+            created_at=art.created_at if art else e.created_at,
+            story_ids=p.get("story_ids") or [], sha=p.get("sha") or ""))
+    return out
+
+
+@app.get("/projects/{project_id}/process", response_model=ProcessView)
+def process_view(project_id: int, db: Session = Depends(get_session)):
+    """The process in force now, and the one the next sprint will use (retro changes applied)."""
+    _proj(db, project_id)
+    sprint = repo.current_sprint(db, project_id)
+    nxt, diff, reason = process.next_process(db, project_id)
+    return ProcessView(current=process.current_process(db, project_id).model_dump(),
+                       current_sprint_number=sprint.number if sprint else None,
+                       next=nxt.model_dump(), next_changes=diff, next_reason=reason)
 
 
 # --- Metrics ----------------------------------------------------------------------------------
