@@ -27,7 +27,7 @@ ceremonies.
 - [Documentation](#documentation)
 
 ## Features
-- Six role-based agents: Product Owner, Scrum Master, Architect, Developer, QA, DevOps
+- Six role-based agents: Product Owner, Scrum Master, Architect, Developer, QA and  DevOps
 - Scrum state machine with human approval gates at sprint planning and sprint review
 - Traceability from user story to design, code and tests
 - Schema-validated agent output with retries, response caching and token usage logging
