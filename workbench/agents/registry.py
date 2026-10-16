@@ -6,5 +6,8 @@ Replace a StubAgent by adding the real agent here, e.g.
 Roles not listed fall back to StubAgent."""
 
 from workbench.agents.base import BaseAgent
+from workbench.agents.devops import DevOpsAgent
 
-AGENTS: dict[str, BaseAgent] = {}
+AGENTS: dict[str, BaseAgent] = {
+    "devops": DevOpsAgent(),
+}
