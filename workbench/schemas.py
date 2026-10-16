@@ -51,10 +51,26 @@ class StandupOutput(AgentOutput):  # Scrum Master, from task states
     blockers: list[str] = []
 
 
+class ProcessChanges(BaseModel):
+    """Process levers the retrospective may change for the next sprint. Bounds are applied in
+    code (`workbench.process.ProcessConfig.apply`), not here."""
+
+    capacity: int | None = Field(None, description="Story points for the next sprint, 3 to 40, "
+                                 "or null to keep")
+    max_fix_retries: int | None = Field(None, description="Developer attempts per bug, 1 to 5, "
+                                        "or null to keep")
+    test_first: bool | None = Field(None, description="true: QA writes the acceptance tests "
+                                    "before the Developer codes; null to keep")
+    add_guidelines: list[str] = Field(default=[], description="New working agreements for every "
+                                      "agent, short sentences (at most 5 are kept)")
+    reason: str = Field("", description="One sentence: which data justifies these changes")
+
+
 class RetroOutput(AgentOutput):  # Scrum Master
     went_well: list[str] = []
     went_wrong: list[str] = []
     actions: list[str] = Field(default=[], description="Improvements for the next sprint")
+    process_changes: ProcessChanges = ProcessChanges()
 
 
 class FileOut(BaseModel):
