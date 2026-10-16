@@ -108,6 +108,28 @@ describe("TraceabilityPage", () => {
     expect(within(dialog).getByText("Linked stories: #10")).toBeInTheDocument();
   });
 
+  it("shows the release of a story and opens its notes", async () => {
+    const user = userEvent.setup();
+    const notes = {
+      ...artifact,
+      id: 9,
+      kind: "release",
+      name: "Release v0.1.0",
+      path: "releases/v0.1.0.md",
+      content: "# Release v0.1.0",
+      story_ids: [10],
+    };
+    mockApi({ ...routes(), "GET /artifacts/9": notes });
+    renderApp("/projects/1/traceability");
+    await screen.findByText("A: sign in");
+    expect(within(table()).getByRole("columnheader", { name: "Release" })).toBeInTheDocument();
+    expect(within(rowOf("B: sign out")).queryByRole("button", { name: /REL/ })).toBeNull();
+
+    await user.click(within(rowOf("A: sign in")).getByRole("button", { name: /REL\s*Release v0\.1\.0/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Release v0.1.0" });
+    await waitFor(() => expect(within(dialog).getByText(/# Release v0\.1\.0/)).toBeInTheDocument());
+  });
+
   it("shows an empty state without stories", async () => {
     mockApi({ ...routes(), "GET /projects/1/traceability": [] });
     renderApp("/projects/1/traceability");

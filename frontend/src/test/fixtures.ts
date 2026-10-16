@@ -2,8 +2,10 @@ import type {
   Artifact,
   Backlog,
   Burndown,
+  ProcessInfo,
   Project,
   ProjectMetrics,
+  Release,
   Sprint,
   SprintDetail,
   SprintMetrics,
@@ -197,6 +199,9 @@ export const traceRows: TraceRow[] = [
     design: [{ artifact_id: 1, name: "A design", kind: "design", path: "", version: 1 }],
     code: [{ artifact_id: 2, name: "app/a.py", kind: "code", path: "app/a.py", version: 1 }],
     test: [{ artifact_id: 3, name: "tests/test_a.py", kind: "test", path: "tests/test_a.py", version: 1 }],
+    release: [
+      { artifact_id: 9, name: "Release v0.1.0", kind: "release", path: "releases/v0.1.0.md", version: 1 },
+    ],
     other: [],
     sprint_number: 1,
     tests_passed: 2,
@@ -214,6 +219,7 @@ export const traceRows: TraceRow[] = [
     design: [],
     code: [{ artifact_id: 4, name: "app/b.py", kind: "code", path: "app/b.py", version: 1 }],
     test: [],
+    release: [],
     other: [],
     sprint_number: 2,
     tests_passed: 1,
@@ -231,6 +237,7 @@ export const traceRows: TraceRow[] = [
     design: [],
     code: [],
     test: [],
+    release: [],
     other: [],
     sprint_number: null,
     tests_passed: 0,
@@ -253,4 +260,29 @@ export const artifact: Artifact = {
   created_at: "2026-10-17T10:00:00",
   content: "x = 1\ny = 2\n",
   story_ids: [10],
+};
+
+export const releases: Release[] = [
+  {
+    artifact_id: 9,
+    version: "v0.1.0",
+    sprint_id: 6,
+    sprint_number: 1,
+    created_at: "2026-10-17T10:00:00",
+    story_ids: [10, 11],
+    sha: "0123456789abcdef0123456789abcdef01234567",
+  },
+];
+
+export const processInfo: ProcessInfo = {
+  current: { capacity: 10, max_fix_retries: 3, test_first: false, guidelines: [] },
+  current_sprint_number: 1,
+  next: {
+    capacity: 7,
+    max_fix_retries: 3,
+    test_first: true,
+    guidelines: ["Write the acceptance tests first"],
+  },
+  next_changes: { capacity: [10, 7], test_first: [false, true] },
+  next_reason: "Commit to last sprint's velocity",
 };

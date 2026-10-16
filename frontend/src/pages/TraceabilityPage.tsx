@@ -139,6 +139,7 @@ export function TraceabilityPage() {
                 <th scope="col">Design</th>
                 <th scope="col">Code</th>
                 <th scope="col">Tests</th>
+                <th scope="col">Release</th>
                 <th scope="col">Result</th>
                 <th scope="col" className="num">
                   AC → tests
@@ -148,7 +149,7 @@ export function TraceabilityPage() {
             <tbody>
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted trace-none">
+                  <td colSpan={7} className="muted trace-none">
                     No stories match these filters.
                   </td>
                 </tr>
@@ -208,6 +209,9 @@ function TraceRowView({ row, onOpen }: { row: TraceRow; onOpen: (id: number) => 
       </td>
       <td>
         <Chips items={row.test} onOpen={onOpen} />
+      </td>
+      <td>
+        <Chips items={row.release} onOpen={onOpen} />
       </td>
       <td>
         <Result row={row} />

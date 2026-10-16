@@ -3,8 +3,10 @@ import type {
   Artifact,
   Backlog,
   Burndown,
+  ProcessInfo,
   Project,
   ProjectMetrics,
+  Release,
   Sprint,
   SprintDetail,
   Task,
@@ -78,6 +80,8 @@ export const api = {
   metrics: (id: number) => request<ProjectMetrics>(`/projects/${id}/metrics`),
   traceability: (id: number) => request<TraceRow[]>(`/projects/${id}/traceability`),
   artifact: (artifactId: number) => request<Artifact>(`/artifacts/${artifactId}`),
+  releases: (id: number) => request<Release[]>(`/projects/${id}/releases`),
+  process: (id: number) => request<ProcessInfo>(`/projects/${id}/process`),
 };
 
 /** URL for the live event stream (Server-Sent Events). */

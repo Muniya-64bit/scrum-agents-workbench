@@ -221,6 +221,7 @@ export interface TraceRow {
   design: TraceItem[];
   code: TraceItem[];
   test: TraceItem[];
+  release: TraceItem[];
   other: TraceItem[];
   sprint_number: number | null;
   tests_passed: number;
@@ -245,4 +246,33 @@ export interface ArtifactSummary {
 export interface Artifact extends ArtifactSummary {
   content: string;
   story_ids: number[];
+}
+
+/** One sprint release: `GET /projects/{id}/releases`. */
+export interface Release {
+  artifact_id: number;
+  version: string;
+  sprint_id: number;
+  sprint_number: number | null;
+  created_at: string;
+  story_ids: number[];
+  sha: string;
+}
+
+/** The process levers (docs/agents.md, "Retrospective and process levers"). */
+export interface ProcessConfig {
+  capacity: number;
+  max_fix_retries: number;
+  test_first: boolean;
+  guidelines: string[];
+}
+
+/** `GET /projects/{id}/process`: the sprint's levers and what the retro changes for the next. */
+export interface ProcessInfo {
+  current: ProcessConfig;
+  current_sprint_number: number | null;
+  next: ProcessConfig;
+  /** Changed levers only, as [old, new] pairs. */
+  next_changes: Record<string, [unknown, unknown]>;
+  next_reason: string;
 }
