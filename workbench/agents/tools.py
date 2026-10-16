@@ -13,6 +13,11 @@ class Tools:
     def log(self, kind: str, message: str = "", **payload):
         return repo.log_event(self.db, self.project_id, self.agent, kind, message, **payload)
 
+    def set_vision(self, vision: str) -> m.Project:
+        p = repo.update(self.db, repo.get(self.db, m.Project, self.project_id), vision=vision)
+        self.log("vision_set", vision)
+        return p
+
     def create_epic(self, title: str, description: str = "") -> m.Epic:
         e = m.Epic(project_id=self.project_id, title=title, description=description)
         e = repo.add(self.db, e)
@@ -22,6 +27,33 @@ class Tools:
     def create_story(self, epic_id: int, **fields) -> m.UserStory:
         s = repo.add(self.db, m.UserStory(epic_id=epic_id, **fields))
         self.log("story_created", s.title, story_id=s.id)
+        return s
+
+    def create_sprint(self, goal: str, capacity: int = 10) -> m.Sprint:
+        number = len(repo.sprints(self.db, self.project_id)) + 1
+        s = repo.add(self.db, m.Sprint(project_id=self.project_id, number=number, goal=goal,
+                                       capacity=capacity, status="active"))
+        self.log("sprint_created", f"Sprint {number}: {goal}", sprint_id=s.id)
+        return s
+
+    def add_story_to_sprint(self, sprint_id: int, story_id: int) -> m.UserStory:
+        s = repo.update(self.db, repo.get(self.db, m.UserStory, story_id),
+                        sprint_id=sprint_id, status="sprint")
+        self.log("story_planned", s.title, story_id=s.id, sprint_id=sprint_id)
+        return s
+
+    def snapshot_burndown(self, sprint_id: int) -> dict:
+        """Record points remaining; the burndown chart is built from these events."""
+        sprint = repo.get(self.db, m.Sprint, sprint_id)
+        remaining = repo.remaining_points(sprint)
+        self.log("burndown_snapshot", f"{remaining} points remaining",
+                 sprint_id=sprint_id, remaining=remaining)
+        return {"sprint_id": sprint_id, "remaining": remaining}
+
+    def save_retro(self, sprint_id: int, retro: dict) -> m.Sprint:
+        s = repo.update(self.db, repo.get(self.db, m.Sprint, sprint_id),
+                        retro=retro, status="done")
+        self.log("retro_saved", f"Sprint {s.number} retrospective", sprint_id=s.id, **retro)
         return s
 
     def create_task(self, story_id: int, title: str, assignee: str = "") -> m.Task:
@@ -56,3 +88,8 @@ class Tools:
         self.log("bug_fixed" if fixed else "bug_fix_failed", b.description, bug_id=b.id,
                  story_id=b.story_id, retries=b.retries)
         return b
+    def link_artifact(self, artifact_id: int, story_ids: list[int], relation: str) -> None:
+        """Trace one artifact to several stories (e.g. sprint-0 architecture -> whole backlog)."""
+        for sid in story_ids:
+            repo.add(self.db, m.TraceLink(story_id=sid, artifact_id=artifact_id, relation=relation))
+        self.log("artifact_linked", relation, artifact_id=artifact_id, story_ids=story_ids)

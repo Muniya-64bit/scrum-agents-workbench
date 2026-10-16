@@ -121,3 +121,4 @@ anything else goes in `other`.
   "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": ""}],
   "code": [], "test": [], "other": []}]
 ```
+`artifact_created`, `artifact_linked`, `design_skipped`, `design_missing`, `bug_reported`.
