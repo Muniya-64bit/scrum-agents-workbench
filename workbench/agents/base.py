@@ -30,15 +30,29 @@ class BaseAgent(ABC):
     def apply(self, tools: Tools, out: BaseModel, task: dict) -> None:
         """Persist the validated output through the tool API."""
 
+    def _agreements(self, db: Session, project_id: int, task: dict) -> str:
+        """The team's working agreements from the last retrospective, for every agent's prompt
+        (the Product Owner runs before any retrospective exists)."""
+        if self.role == "product_owner":
+            return ""
+        from workbench.process import effective_process  # lazy: process imports the agents' deps
+
+        guidelines = effective_process(db, project_id, task.get("phase", "")).guidelines
+        if not guidelines:
+            return ""
+        return ("\n\nTeam working agreements (from the last retrospective):\n"
+                + "\n".join(f"- {g}" for g in guidelines))
+
     def run(self, db: Session, project_id: int, task: dict | None = None) -> BaseModel:
         task = task or {}
         tools = Tools(db, project_id, self.role)
         tools.log("agent_started", task.get("name", ""))
         usage: dict = {}
         started = time.perf_counter()
+        prompt = self.build_prompt(db, project_id, task) + self._agreements(db, project_id, task)
         out = self.llm.complete_json(
             self.system_prompt,
-            self.build_prompt(db, project_id, task),
+            prompt,
             self.output_schema,
             mock=lambda: self.mock_output(db, project_id, task),
             usage=usage,
