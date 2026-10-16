@@ -74,6 +74,8 @@ AGENTS["product_owner"] = ProductOwnerAgent()
 | `write_artifact(kind, name, content, story_id, path, version)` | Save an artifact and link it to a story |
 | `report_bug(story_id, description)` | Open a bug for a story |
 | `record_fix_attempt(bug_id, fixed)` | Count a Developer fix attempt; `fixed` marks the bug fixed |
+| `reopen_bug(bug_id)` | QA re-tested a bug the Developer called fixed and it still fails |
+| `verify_bug(bug_id)` | QA re-tested the story and the bug no longer reproduces |
 | `log(kind, message, **payload)` | Add a custom event |
 
 ## Testing an agent
@@ -111,6 +113,50 @@ the project's sandbox workspace (`workbench/workspace.py`): a folder with its ow
   `MAX_FIX_RETRIES` (3) attempts the bug is skipped with a `bug_retry_limit` event.
 - With nothing to build, no LLM call is made (`code_skipped` event).
 - Tests use an autouse fixture in `tests/conftest.py` that points `WORKSPACES_DIR` at a temp dir.
+
+## QA agent
+`QAAgent` (`workbench/agents/qa.py`) runs after the Developer in the execution phase. For each
+sprint story that has code it:
+
+1. asks the LLM for pytest files under `tests/` (one test per acceptance criterion), commits them
+   to the workspace and saves them as `test` artifacts traced to the story. Files outside
+   `tests/` are rejected.
+2. runs them with `workbench/runner.py`: a pytest subprocess in the workspace with a 120 second
+   limit and no `ANTHROPIC_API_KEY` in its environment. The workspace is a plain directory, not a
+   container, so this guards against accidents rather than hostile code.
+3. files one `Bug` per failing test (no duplicates), and sets QA tasks to `testing` or `done`.
+4. while bugs are open and have attempts left, calls the Developer with `{"story_id": id}` and
+   tests again. The limit is `MAX_FIX_RETRIES` (3) attempts per bug. A bug the Developer marked
+   fixed that still fails is reopened; after the limit it stays open for a human.
+
+Every run logs a `test_run` event (`passed`, `failed`, `ok`) for the metrics views.
+`QAAgent(developer=None)` only reports bugs and never reruns the Developer.
+
+## DevOps agent
+`DevOpsAgent` (`workbench/agents/devops.py`) runs in the release phase after QA and the review
+gate. It uses the same per-project `Workspace` as Developer and QA.
+
+- It generates exactly `Dockerfile`, `.github/workflows/ci.yml` and `RELEASE_NOTES.md`; any other
+  LLM-supplied path is rejected.
+- Release notes contain only stories whose tasks are all `done`, so a story is not released until
+  both its Developer and QA work has completed.
+- Changed files become `release` artifacts and are committed together as `Prepare release`.
+- In real-model mode, Docker is built when available. Mock-mode runs skip the external build so
+  tests remain deterministic. Success, failure and skipped builds are recorded as events.
+
+## Agents that run in several phases
+The Scrum Master runs in sprint planning, review and retro, and each needs a different prompt and
+output schema. `ScrumMasterAgent` (`workbench/agents/scrum_master.py`) is the one registered agent;
+it reads `task["phase"]` and delegates to a handler per phase (`SprintPlanner`, `StandupAgent`,
+`RetroAgent`). Use the same pattern for any agent that serves more than one phase.
+
+- **Capacity is enforced in code.** `_select_stories` drops unknown ids and anything over capacity,
+  because the LLM only proposes the sprint.
+- **Retro feeds the next sprint.** `SprintPlanner.build_prompt` adds the previous sprint's retro
+  actions to the prompt.
+- **Burndown** comes from `burndown_snapshot` events written at each stand-up. Read it with
+  `repo.burndown(db, sprint)`.
+
 ## Architect
 `ArchitectAgent` (`workbench/agents/architect.py`) runs in two phases and delegates by
 `task["phase"]`:

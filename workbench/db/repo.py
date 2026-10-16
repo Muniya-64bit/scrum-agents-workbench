@@ -93,6 +93,8 @@ def trace_links(db: Session, project_id: int) -> list[tuple[m.TraceLink, m.Artif
         .order_by(m.TraceLink.id)
     )
     return [(link, art) for link, art in db.execute(q)]
+
+
 def current_sprint(db: Session, project_id: int) -> m.Sprint | None:
     all_sprints = sprints(db, project_id)
     return all_sprints[-1] if all_sprints else None
@@ -147,13 +149,6 @@ def events_since(db: Session, project_id: int, after_id: int = 0) -> list[m.Even
         .where(m.Event.project_id == project_id, m.Event.id > after_id)
         .order_by(m.Event.id)
     )
-    return list(db.scalars(q))
-
-
-def artifacts(db: Session, project_id: int, kind: str | None = None) -> list[m.Artifact]:
-    q = select(m.Artifact).where(m.Artifact.project_id == project_id).order_by(m.Artifact.id)
-    if kind:
-        q = q.where(m.Artifact.kind == kind)
     return list(db.scalars(q))
 
 

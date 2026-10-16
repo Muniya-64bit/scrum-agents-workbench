@@ -8,14 +8,18 @@ Roles not listed fall back to StubAgent."""
 from workbench.agents.architect import ArchitectAgent
 from workbench.agents.base import BaseAgent
 from workbench.agents.developer import DeveloperAgent
-
-AGENTS: dict[str, BaseAgent] = {
-    "developer": DeveloperAgent(),
+from workbench.agents.devops import DevOpsAgent
 from workbench.agents.product_owner import ProductOwnerAgent
+from workbench.agents.qa import QAAgent
 from workbench.agents.scrum_master import ScrumMasterAgent
 
+_developer = DeveloperAgent()
+
 AGENTS: dict[str, BaseAgent] = {
-    "architect": ArchitectAgent(),
     "product_owner": ProductOwnerAgent(),
     "scrum_master": ScrumMasterAgent(),
+    "architect": ArchitectAgent(),
+    "developer": _developer,
+    "qa": QAAgent(developer=_developer),  # QA asks the Developer to fix the bugs it files
+    "devops": DevOpsAgent(),
 }

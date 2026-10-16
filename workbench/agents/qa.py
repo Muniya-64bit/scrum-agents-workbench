@@ -1,0 +1,224 @@
+"""QA agent: turns acceptance criteria into pytest tests, runs them, files bugs.
+
+For each sprint story that has code:
+  1. one LLM call writes pytest files under `tests/` in the workspace (committed, saved as
+     `test` artifacts traced to the story). Stories that already have tests are not rewritten.
+  2. the tests run in the workspace (workbench.runner) and the result is parsed
+  3. failures become Bug records (one per failing test, no duplicates); a bug the Developer
+     called fixed that still fails is reopened
+  4. while bugs are open and the Developer has attempts left (MAX_FIX_RETRIES, tracked in
+     `Bug.retries`), the Developer reruns the story and QA tests again. After that the bug stays
+     open for a human.
+
+QA tasks move to `testing` while tests fail and to `done` once they pass."""
+
+from pathlib import Path
+
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from workbench import runner
+from workbench.agents.base import BaseAgent
+from workbench.agents.developer import MAX_FIX_RETRIES
+from workbench.agents.tools import Tools
+from workbench.db import models as m
+from workbench.db import repo
+from workbench.llm.client import LLMClient
+from workbench.schemas import CodeOutput
+from workbench.workspace import UnsafePath, Workspace
+
+FILES_CHARS = 12000  # budget for code shown to the LLM
+MAX_BUGS_PER_RUN = 5  # one bug per failing test, capped so a broken app does not flood the board
+PYTEST_INI = "[pytest]\ntestpaths = tests\npythonpath = .\n"  # keeps pytest off the parent config
+GITIGNORE = "__pycache__/\n*.pyc\n.pytest_cache/\n"
+
+SYSTEM_PROMPT = """You are a QA engineer on a Scrum team. Write pytest tests for ONE user story.
+
+Rules:
+- Write one test per acceptance criterion. Name each test after its criterion, and put the
+  Given/When/Then text in a comment or docstring.
+- Put all files under `tests/`, for example `tests/test_story_<id>.py`. Return the FULL file
+  content in `files`, with forward-slash paths.
+- Test the code that exists. For a FastAPI app, use `from fastapi.testclient import TestClient`
+  and `from app.main import app`. Keep each test independent of the others.
+- Do not change application code. Do not use the network or sleep.
+- summary is one sentence."""
+
+
+def _tests_for(db: Session, project_id: int, story_id: int) -> list[str]:
+    paths = {a.path for link, a in repo.trace_links(db, project_id)
+             if link.story_id == story_id and link.relation == "test" and a.path}
+    return sorted(paths)
+
+
+def _has_code(db: Session, project_id: int, story_id: int) -> bool:
+    return any(link.story_id == story_id and link.relation == "code"
+               for link, _ in repo.trace_links(db, project_id))
+
+
+def _bugs(db: Session, story_id: int) -> list[m.Bug]:
+    return list(db.query(m.Bug).filter_by(story_id=story_id).order_by(m.Bug.id))
+
+
+def _fixable(bugs: list[m.Bug]) -> list[m.Bug]:
+    return [b for b in bugs if b.status == "open" and b.retries < MAX_FIX_RETRIES]
+
+
+class QAAgent(BaseAgent):
+    role = "qa"
+    system_prompt = SYSTEM_PROMPT
+    output_schema = CodeOutput
+
+    def __init__(self, llm: LLMClient | None = None, workspaces_dir: str | Path | None = None,
+                 developer: BaseAgent | None = None, timeout: int = runner.TIMEOUT_SECONDS):
+        super().__init__(llm)
+        self.workspaces_dir = workspaces_dir  # None: use config.WORKSPACES_DIR at run time
+        self.developer = developer  # reran for bug fixes; None means QA only reports bugs
+        self.timeout = timeout
+
+    def workspace(self, project_id: int) -> Workspace:
+        return Workspace(project_id, self.workspaces_dir)
+
+    # --- choosing what to test --------------------------------------------------------------
+
+    def stories_to_test(self, db: Session, project_id: int, task: dict) -> list[m.UserStory]:
+        """`task["story_id"]` forces one story. Otherwise: sprint stories that have code and
+        either no tests yet or open bugs."""
+        if task.get("story_id"):
+            s = repo.get(db, m.UserStory, task["story_id"])
+            return [s] if s and s.epic.project_id == project_id else []
+        return [s for s in repo.backlog(db, project_id)
+                if s.sprint_id is not None and _has_code(db, project_id, s.id)
+                and (not _tests_for(db, project_id, s.id) or _fixable(_bugs(db, s.id)))]
+
+    def run(self, db: Session, project_id: int, task: dict | None = None) -> BaseModel:
+        task = task or {}
+        tools = Tools(db, project_id, self.role)
+        stories = self.stories_to_test(db, project_id, task)
+        if not stories:  # nothing to test: no LLM call
+            tools.log("tests_skipped", "No stories with code need testing")
+            return CodeOutput(summary="No stories need testing")
+        passing = sum(self._test_story(db, tools, s, task) for s in stories)
+        return CodeOutput(summary=f"Tested {len(stories)} stories, {passing} passing")
+
+    # --- one story ----------------------------------------------------------------------------
+
+    def _test_story(self, db: Session, tools: Tools, story: m.UserStory, task: dict) -> bool:
+        project_id = tools.project_id
+        if not _has_code(db, project_id, story.id):
+            tools.log("tests_skipped", f"Story #{story.id} has no code yet", story_id=story.id)
+            return False
+        if not _tests_for(db, project_id, story.id):
+            super().run(db, project_id, {**task, "story_id": story.id})  # LLM writes the tests
+        targets = _tests_for(db, project_id, story.id)
+        if not targets:
+            tools.log("tests_missing", f"No valid tests for story #{story.id}", story_id=story.id)
+            return False
+        for attempt in range(MAX_FIX_RETRIES + 1):
+            result = runner.run_pytest(self.workspace(project_id).path, targets, self.timeout)
+            self._record(tools, story, result)
+            if result.ok:
+                return True
+            if self.developer is None or not _fixable(_bugs(db, story.id)):
+                break
+            if attempt < MAX_FIX_RETRIES:
+                self.developer.run(db, project_id, {"name": "bug fix", "phase": "execution",
+                                                    "story_id": story.id})
+        if _bugs(db, story.id):
+            tools.log("bugs_left_open", f"Story #{story.id} still fails after the fix attempts",
+                      story_id=story.id)
+        return False
+
+    def _record(self, tools: Tools, story: m.UserStory, result: runner.TestResult) -> None:
+        failed = len(result.failures)
+        tools.log("test_run", f"{result.passed} passed, {failed} failed", story_id=story.id,
+                  passed=result.passed, failed=failed, ok=result.ok)
+        qa_tasks = [t for t in story.tasks if t.assignee == self.role]
+        bugs = _bugs(tools.db, story.id)
+        if result.ok:
+            for b in bugs:  # open ones no longer reproduce; "fixed" ones are now confirmed
+                tools.verify_bug(b.id)
+            for t in qa_tasks:
+                if t.status != "done":
+                    tools.update_task(t.id, "done")
+            return
+        for t in qa_tasks:
+            if t.status in ("todo", "doing"):
+                tools.update_task(t.id, "testing")
+        for f in result.failures[:MAX_BUGS_PER_RUN]:
+            known = next((b for b in bugs if b.description.startswith(f"{f.test}:")), None)
+            if known is None:
+                tools.report_bug(story.id, f"{f.test}: {f.message}")
+            elif known.status == "fixed":  # the Developer said fixed, but it still fails
+                tools.reopen_bug(known.id)
+
+    # --- writing the tests (one LLM call per story) -------------------------------------------
+
+    def build_prompt(self, db: Session, project_id: int, task: dict) -> str:
+        project = repo.get(db, m.Project, project_id)
+        story = repo.get(db, m.UserStory, task["story_id"])
+        lines = [f"Project: {project.name}", "",
+                 f"Story [{story.id}] {story.title}",
+                 f"As a {story.as_a}, I want {story.i_want}, so that {story.so_that}",
+                 "Acceptance criteria:"]
+        lines += [f"- {c}" for c in story.acceptance_criteria] or ["- (none given)"]
+        lines += ["", f"Write the tests in tests/test_story_{story.id}.py.", "", "Code to test:"]
+        ws, used = self.workspace(project_id), 0
+        for path in ws.files():
+            if path.startswith("tests/") or not path.endswith((".py", ".txt")):
+                continue
+            content = ws.read(path)
+            if used + len(content) > FILES_CHARS:
+                lines.append(f"(not shown, too large: {path})")
+                continue
+            used += len(content)
+            lines += [f"=== {path} ===", content]
+        return "\n".join(lines)
+
+    def mock_output(self, db: Session, project_id: int, task: dict) -> dict:
+        story = repo.get(db, m.UserStory, task["story_id"])
+        title = story.title
+        body = [f'"""Tests for story #{story.id}: {title} (generated in mock mode)."""', "",
+                f"from app.features import story_{story.id}", ""]
+        for i, criterion in enumerate(story.acceptance_criteria or ["The story exists"], 1):
+            comment = " ".join(criterion.split())
+            body += ["", f"def test_criterion_{i}():", f"    # {comment}",
+                     f"    assert story_{story.id}.story_{story.id}() == {title!r}", ""]
+        return {"summary": f"Wrote tests for story #{story.id}",
+                "files": [{"path": f"tests/test_story_{story.id}.py",
+                           "content": "\n".join(body).rstrip() + "\n"}]}
+
+    def apply(self, tools: Tools, out: BaseModel, task: dict) -> None:
+        assert isinstance(out, CodeOutput)
+        db, story = tools.db, repo.get(tools.db, m.UserStory, task["story_id"])
+        ws = self.workspace(tools.project_id).init()
+
+        changed: dict[str, str] = {}
+        for f in out.files:
+            try:
+                path = ws.resolve(f.path).relative_to(ws.path).as_posix()
+            except UnsafePath:
+                tools.log("file_rejected", f.path, story_id=story.id)
+                continue
+            if not path.startswith("tests/") or not path.endswith(".py"):
+                tools.log("file_rejected", f"{f.path} (QA may only write tests/*.py)",
+                          story_id=story.id)
+                continue
+            if ws.write(path, f.content):
+                changed[path] = f.content
+        if changed:  # scaffolded with the first tests, in the same commit
+            ws.write("pytest.ini", PYTEST_INI)
+            ws.write(".gitignore", GITIGNORE)
+
+        sha = ws.commit(f"Tests for story #{story.id}: {story.title}") if changed else None
+        if sha is None:
+            tools.log("tests_unchanged", story.title, story_id=story.id)
+            return
+        versions: dict[str, int] = {}
+        for a in repo.artifacts(db, tools.project_id, "test"):
+            versions[a.path] = versions.get(a.path, 0) + 1
+        for path, content in changed.items():
+            tools.write_artifact("test", path, content, story_id=story.id, path=path,
+                                 version=versions.get(path, 0) + 1)
+        tools.log("tests_committed", story.title, story_id=story.id, sha=sha,
+                  files=sorted(changed))

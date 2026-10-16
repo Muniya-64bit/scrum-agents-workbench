@@ -88,6 +88,19 @@ class Tools:
         self.log("bug_fixed" if fixed else "bug_fix_failed", b.description, bug_id=b.id,
                  story_id=b.story_id, retries=b.retries)
         return b
+
+    def reopen_bug(self, bug_id: int) -> m.Bug:
+        """QA re-tested a bug the Developer called fixed and it still fails."""
+        b = repo.update(self.db, repo.get(self.db, m.Bug, bug_id), status="open")
+        self.log("bug_reopened", b.description, bug_id=b.id, story_id=b.story_id)
+        return b
+
+    def verify_bug(self, bug_id: int) -> m.Bug:
+        """QA re-tested the story and the bug no longer reproduces."""
+        b = repo.update(self.db, repo.get(self.db, m.Bug, bug_id), status="fixed")
+        self.log("bug_verified", b.description, bug_id=b.id, story_id=b.story_id)
+        return b
+
     def link_artifact(self, artifact_id: int, story_ids: list[int], relation: str) -> None:
         """Trace one artifact to several stories (e.g. sprint-0 architecture -> whole backlog)."""
         for sid in story_ids:
