@@ -66,8 +66,9 @@ AGENTS["product_owner"] = ProductOwnerAgent()
 | `create_story(epic_id, **fields)` | New user story |
 | `create_task(story_id, title, assignee)` | New task |
 | `update_task(task_id, status)` | `todo`, `doing`, `testing` or `done` |
-| `write_artifact(kind, name, content, story_id, path)` | Save an artifact and link it to a story |
+| `write_artifact(kind, name, content, story_id, path, version)` | Save an artifact and link it to a story |
 | `report_bug(story_id, description)` | Open a bug for a story |
+| `record_fix_attempt(bug_id, fixed)` | Count a Developer fix attempt; `fixed` marks the bug fixed |
 | `log(kind, message, **payload)` | Add a custom event |
 
 ## Testing an agent
@@ -84,3 +85,24 @@ def test_po_creates_backlog(db):
 - Never write to the database directly; use `Tools` so the event log stays complete.
 - Keep the output schema small. Smaller schemas fail validation less often.
 - Real runs are cached in `.cache/llm/`. Delete that folder to force fresh calls.
+
+## Developer
+`DeveloperAgent` (`workbench/agents/developer.py`) runs in the execution phase and writes code into
+the project's sandbox workspace (`workbench/workspace.py`): a folder with its own git repository at
+`$WORKSPACES_DIR/project-<id>`.
+
+- **Which stories:** sprint stories that have no `code` artifact yet, plus coded stories with open
+  bugs. `task["story_id"]` forces a single story, which is how QA asks for a rerun.
+- **One LLM call and one commit per story.** The prompt has the story, its acceptance criteria,
+  the architecture overview, the story's design notes, open bugs and the current files. The
+  commit message references the story: `Story #3: Create an item` or
+  `Fix bug #7 in story #3: Create an item`.
+- **Output** is `CodeOutput`: full content of each changed file. Each changed file becomes a `code`
+  artifact traced to the story, with `version` counting changes to that path. The developer's
+  tasks move `todo` -> `doing` -> `done`.
+- **Unsafe paths** (absolute, `..`, `.git`) are not written; each gets a `file_rejected` event.
+- **Bug fixes:** every attempt increments `Bug.retries`. A commit marks the bug `fixed`; QA reopens
+  it if the tests still fail. With no change the bug stays open (`bug_fix_failed`). After
+  `MAX_FIX_RETRIES` (3) attempts the bug is skipped with a `bug_retry_limit` event.
+- With nothing to build, no LLM call is made (`code_skipped` event).
+- Tests use an autouse fixture in `tests/conftest.py` that points `WORKSPACES_DIR` at a temp dir.
