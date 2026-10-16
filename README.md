@@ -30,6 +30,7 @@ ceremonies.
 - Six role-based agents: Product Owner, Scrum Master, Architect, Developer, QA, DevOps
 - Scrum state machine with human approval gates at sprint planning and sprint review
 - Traceability from user story to design, code and tests
+- Metrics dashboard (GQM): burndown, velocity, quality, AI cost
 - Schema-validated agent output with retries, response caching and token usage logging
 - Mock mode (`MOCK_LLM=1`) so development and tests cost no tokens
 - Append-only event log that feeds the activity feed

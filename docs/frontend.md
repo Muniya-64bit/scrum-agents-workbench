@@ -28,6 +28,7 @@ CI runs typecheck, tests and build on every pull request.
 | `/projects/:id/backlog` | Vision, stats, epics and stories with Given/When/Then criteria |
 | `/projects/:id/board` | Kanban board for the latest sprint (or every task before planning) |
 | `/projects/:id/activity` | Live activity feed with agent filters, and the approval card at a gate |
+| `/projects/:id/metrics` | GQM dashboard: KPI tiles, burndown, velocity, quality, AI cost and the GQM goals ([metrics.md](metrics.md)) |
 | `/inbox` | Approval inbox: every project waiting at a gate, across projects |
 
 Every project page shows the phase bar and the phase controls: **Start &lt;next phase&gt;**, or
@@ -60,14 +61,23 @@ frontend/src/
   api/          client.ts (typed fetch wrapper, ApiError), types.ts (mirrors workbench/api/views.py)
   components/   AppShell (sidebar), PhaseBar, ActivityFeed, ApprovalCard, Avatar, Toast,
                 ui.tsx (Button, Badge, states), icons
-  lib/          scrum.ts (labels), events.ts (event text, times), useEventStream.ts (SSE),
+  components/charts/  ChartFrame (axes, ticks), BurndownChart, BarChart (SVG, no library)
+  lib/          format.ts (pct, usd, tokens, delta, duration), scrum.ts (labels),
+                events.ts (event text, times), useEventStream.ts (SSE),
                 useResource.ts (data loading), usePolling.ts, projectsChanged.ts, theme.ts
   pages/        ProjectsPage, ProjectLayout (header, phase controls, live stream), BacklogPage,
-                BoardPage, ActivityPage, InboxPage
+                BoardPage, ActivityPage, MetricsPage, InboxPage
   styles/       tokens.css (colors, light/dark), app.css
   test/         fake API (mockApi), fake EventSource, render helper, fixtures
 ```
 When you change a response model in `workbench/api/views.py`, update `src/api/types.ts` too.
+
+## Charts
+The charts are plain SVG with no chart library. Each one has a title and description for screen
+readers, points and bars can be reached with Tab and show a tooltip on focus or hover, and
+colors come from the design tokens so light and dark mode both work. The burndown plots time
+since the sprint started, or the step number when the sprint lasted less than a second (mock
+runs). Change values and wording in `lib/format.ts`; the numbers come ready-made from the API.
 
 ## Design
 Neutral base in the style of Linear, status colors in the style of GitHub Primer, one indigo
