@@ -14,3 +14,15 @@ test:
 
 lint:
 	$(VENV)/bin/ruff check .
+
+ui-setup:
+	cd frontend && npm ci
+
+ui:
+	cd frontend && npm run dev
+
+ui-test:
+	cd frontend && npm run typecheck && npm test
+
+seed:
+	$(PY) scripts/seed_demo.py
