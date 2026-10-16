@@ -157,9 +157,15 @@ Set in `.env` (copy from `.env.example`).
 | POST | `/projects/{id}/advance` | Run the next phase (409 while awaiting approval) |
 | POST | `/projects/{id}/approve` | Clear a human gate |
 | GET | `/projects/{id}/events?after=<id>` | Activity feed |
+| GET | `/projects/{id}/stream` | Live activity feed (Server-Sent Events) |
+| GET | `/projects/{id}/backlog` | Epics and stories |
+| GET | `/projects/{id}/sprints`, `/sprints/{id}` | Sprints with stories and tasks |
+| GET / PATCH | `/projects/{id}/tasks`, `/tasks/{id}` | List tasks, move a task on the board |
+| GET | `/projects/{id}/artifacts`, `/artifacts/{id}` | Design, code, test and release artifacts |
+| GET | `/projects/{id}/bugs` | Bugs from QA |
+| GET | `/projects/{id}/traceability` | Story -> design -> code -> test |
 
-Full reference with examples: [docs/api.md](docs/api.md). Backlog, sprint, task, artifact and
-traceability endpoints are planned (issue #13).
+Full reference with examples: [docs/api.md](docs/api.md).
 
 ## Project structure
 ```
