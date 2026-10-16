@@ -22,7 +22,9 @@ All bodies are JSON. There is no authentication; run locally only.
 | GET | `/projects/{id}/artifacts?kind=` | Artifact list (without content) |
 | GET | `/artifacts/{id}` | One artifact with content and linked story ids |
 | GET | `/projects/{id}/bugs?status=` | Bugs filed against the project's stories |
-| GET | `/projects/{id}/traceability` | Story -> design -> code -> test table |
+| GET | `/projects/{id}/traceability` | Story -> design -> code -> test table with test results |
+| GET | `/projects/{id}/metrics` | GQM metrics per sprint, project totals, cost |
+| GET | `/sprints/{id}/burndown` | Burndown series and ideal line of one sprint |
 
 Every response has a schema in the OpenAPI docs at `/docs`. Unknown ids return 404.
 
@@ -123,10 +125,56 @@ The change is logged as a `task_updated` event with agent `human`. An invalid st
 ## Traceability
 `GET /projects/1/traceability` returns one row per backlog story. Artifacts are grouped by kind:
 `architecture`, `diagram` and `api_spec` go in `design`; `code` and `test` keep their names;
-anything else goes in `other`.
+anything else goes in `other`. The other fields summarise the story's quality state.
 ```json
-[{"story_id": 2, "title": "Add todo", "status": "backlog",
+[{"story_id": 2, "title": "Add todo", "status": "sprint",
   "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": ""}],
-  "code": [], "test": [], "other": []}]
+  "code": [], "test": [], "other": [],
+  "sprint_number": 1, "tests_passed": 2, "tests_failed": 0, "last_test_ok": true,
+  "open_bugs": 0, "ac_count": 2, "test_count": 2, "complete": false}]
 ```
+| Field | Meaning |
+|---|---|
+| `sprint_number` | Number of the story's current sprint, `null` when it is not planned |
+| `tests_passed`, `tests_failed`, `last_test_ok` | Result of the story's latest `test_run` (any sprint). `last_test_ok` is `null` when it never ran |
+| `open_bugs` | Bugs of the story with status `open` |
+| `ac_count` | Acceptance criteria of the story |
+| `test_count` | Test functions in the latest version of each test file traced to the story |
+| `complete` | The story has at least one design, one code and one test artifact |
+
+## Metrics
+`GET /projects/1/metrics` returns the GQM metrics (definitions in [metrics.md](metrics.md)).
+Ratios are `null` when they are undefined (for example no test ran). Unknown project: 404.
+```json
+{"project": {"stories_total": 4, "stories_done": 4, "sprint_count": 2, "avg_velocity": 5.0,
+             "total_cost_usd": 0.067, "llm_modes": ["live"], "trace_completeness": 0.25},
+ "sprints": [{"sprint_id": 5, "sprint_number": 1, "closed": true, "committed_points": 8,
+              "completed_points": 5, "commitment_reliability": 0.625, "first_pass_yield": 0.333,
+              "test_pass_rate": 0.8, "bugs_open_at_end": 1, "est_cost_usd": 0.04,
+              "process": {}}],
+ "unattributed": {"llm_calls": 1, "input_tokens": 1000, "output_tokens": 500,
+                  "est_cost_usd": 0.007},
+ "gqm": [{"id": "G1", "goal": "...", "viewpoint": "Scrum Master",
+          "questions": [{"id": "Q1", "text": "...", "metrics": [
+            {"key": "commitment_reliability", "name": "...", "definition": "...",
+             "unit": "ratio"}]}]}],
+ "pricing": {"model": "claude-sonnet-5-5", "input_per_mtok": 2.0, "output_per_mtok": 10.0,
+             "source": "..."}}
+```
+(The `project` and `sprints` objects are trimmed here; each lists every key from metrics.md.)
+
+## Burndown
+`GET /sprints/5/burndown` returns the points still open over time, rebuilt from task events.
+`t` is seconds since the sprint started and `step` is the point's index; draw `step` when
+`duration_s` is below one second. Unknown sprint: 404 `sprint not found`.
+```json
+{"sprint_id": 5, "sprint_number": 1, "committed_points": 8, "remaining_points": 3,
+ "duration_s": 125.0, "closed": true,
+ "series": [{"t": 0.0, "step": 0, "at": "2026-10-17T10:00:00", "remaining": 8,
+             "story_id": null, "label": "Sprint start"},
+            {"t": 40.2, "step": 1, "at": "2026-10-17T10:00:40", "remaining": 5,
+             "story_id": 3, "label": "Done: A: sign in"}],
+ "ideal": [{"t": 0.0, "remaining": 8}, {"t": 125.0, "remaining": 0}]}
+```
+
 `artifact_created`, `artifact_linked`, `design_skipped`, `design_missing`, `bug_reported`.
