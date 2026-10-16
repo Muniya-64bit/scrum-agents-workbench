@@ -35,11 +35,64 @@ def backlog(db: Session, project_id: int) -> list[m.UserStory]:
     return list(db.scalars(q))
 
 
+def list_projects(db: Session) -> list[m.Project]:
+    return list(db.scalars(select(m.Project).order_by(m.Project.id)))
+
+
+def epics(db: Session, project_id: int) -> list[m.Epic]:
+    q = select(m.Epic).where(m.Epic.project_id == project_id).order_by(m.Epic.id)
+    return list(db.scalars(q))
+
+
 def sprints(db: Session, project_id: int) -> list[m.Sprint]:
     q = select(m.Sprint).where(m.Sprint.project_id == project_id).order_by(m.Sprint.number)
     return list(db.scalars(q))
 
 
+def tasks(db: Session, project_id: int, sprint_id: int | None = None,
+          status: str | None = None) -> list[m.Task]:
+    q = (
+        select(m.Task)
+        .join(m.UserStory)
+        .join(m.Epic)
+        .where(m.Epic.project_id == project_id)
+        .order_by(m.Task.id)
+    )
+    if sprint_id is not None:
+        q = q.where(m.UserStory.sprint_id == sprint_id)
+    if status:
+        q = q.where(m.Task.status == status)
+    return list(db.scalars(q))
+
+
+def artifacts(db: Session, project_id: int, kind: str | None = None) -> list[m.Artifact]:
+    q = select(m.Artifact).where(m.Artifact.project_id == project_id).order_by(m.Artifact.id)
+    if kind:
+        q = q.where(m.Artifact.kind == kind)
+    return list(db.scalars(q))
+
+
+def bugs(db: Session, project_id: int, status: str | None = None) -> list[m.Bug]:
+    q = (
+        select(m.Bug)
+        .join(m.UserStory)
+        .join(m.Epic)
+        .where(m.Epic.project_id == project_id)
+        .order_by(m.Bug.id)
+    )
+    if status:
+        q = q.where(m.Bug.status == status)
+    return list(db.scalars(q))
+
+
+def trace_links(db: Session, project_id: int) -> list[tuple[m.TraceLink, m.Artifact]]:
+    q = (
+        select(m.TraceLink, m.Artifact)
+        .join(m.Artifact, m.TraceLink.artifact_id == m.Artifact.id)
+        .where(m.Artifact.project_id == project_id)
+        .order_by(m.TraceLink.id)
+    )
+    return [(link, art) for link, art in db.execute(q)]
 def current_sprint(db: Session, project_id: int) -> m.Sprint | None:
     all_sprints = sprints(db, project_id)
     return all_sprints[-1] if all_sprints else None

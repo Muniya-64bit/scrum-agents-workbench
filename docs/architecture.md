@@ -28,8 +28,8 @@ flowchart LR
 | Data layer | `workbench/db/` | SQLAlchemy models, sessions, query helpers |
 | Contracts | `workbench/schemas.py` | Pydantic models for agent outputs |
 
-The web UI (`frontend/`) and the server-sent events stream are not built yet. See issues
-#13 to #15.
+The web UI (`frontend/`) is not built yet. See issues #14 and #15. The API streams the event
+log to clients as Server-Sent Events (`workbench/api/sse.py`).
 
 ## State machine
 Gates pause the run until a human calls the approve endpoint.
