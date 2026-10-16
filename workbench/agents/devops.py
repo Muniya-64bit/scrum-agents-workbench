@@ -1,9 +1,7 @@
 """DevOps agent: prepare a generated project for CI and container delivery.
 
-The agent writes only three release files into the project's generated workspace, records them
-as release artifacts, and attempts a Docker build when Docker is available.  The shared
-``Workspace`` helper is being developed on the Developer branch; this module deliberately uses
-the same directory convention so it can adopt that helper with a small follow-up change.
+The agent writes only three release files into the project's generated workspace, commits them,
+records them as release artifacts, and attempts a Docker build when Docker is available.
 """
 
 import re
@@ -20,6 +18,7 @@ from workbench.agents.tools import Tools
 from workbench.db import models as m
 from workbench.db import repo
 from workbench.schemas import CodeOutput
+from workbench.workspace import Workspace
 
 ALLOWED_FILES = {
     "Dockerfile",
@@ -72,21 +71,14 @@ class DevOpsAgent(BaseAgent):
         self.workspaces_dir = workspaces_dir
         self.docker_timeout = docker_timeout
 
-    def workspace_path(self, project_id: int) -> Path:
-        root = self.workspaces_dir if self.workspaces_dir is not None else config.WORKSPACES_DIR
-        return Path(root).resolve() / f"project-{project_id}"
+    def workspace(self, project_id: int) -> Workspace:
+        return Workspace(project_id, self.workspaces_dir)
 
     def build_prompt(self, db: Session, project_id: int, task: dict) -> str:
         project = repo.get(db, m.Project, project_id)
         stories = _completed_stories(db, project_id)
-        workspace = self.workspace_path(project_id)
-        files = []
-        if workspace.exists():
-            files = sorted(
-                path.relative_to(workspace).as_posix()
-                for path in workspace.rglob("*")
-                if path.is_file() and ".git" not in path.relative_to(workspace).parts
-            )
+        workspace = self.workspace(project_id)
+        files = workspace.files()
 
         lines = [
             f"Project: {project.name}",
@@ -103,7 +95,7 @@ class DevOpsAgent(BaseAgent):
             lines.append("- (empty workspace)")
 
         for dependency_file in ("requirements.txt", "pyproject.toml"):
-            path = workspace / dependency_file
+            path = workspace.resolve(dependency_file)
             if path.is_file():
                 lines += ["", f"=== {dependency_file} ===", path.read_text(encoding="utf-8")]
         return "\n".join(lines)
@@ -122,29 +114,34 @@ class DevOpsAgent(BaseAgent):
 
     def apply(self, tools: Tools, out: BaseModel, task: dict) -> None:
         assert isinstance(out, CodeOutput)
-        workspace = self.workspace_path(tools.project_id)
-        workspace.mkdir(parents=True, exist_ok=True)
+        workspace = self.workspace(tools.project_id).init()
 
         supplied = {file.path: file.content for file in out.files}
         for path in sorted(set(supplied) - ALLOWED_FILES):
             tools.log("release_file_rejected", path)
 
+        changed = []
         for path in sorted(ALLOWED_FILES):
             if path not in supplied:
                 tools.log("release_file_missing", path)
                 continue
-            target = workspace.joinpath(*path.split("/"))
-            target.parent.mkdir(parents=True, exist_ok=True)
             content = supplied[path]
-            if target.is_file() and target.read_text(encoding="utf-8") == content:
+            if not workspace.write(path, content):
                 tools.log("release_file_unchanged", path)
                 continue
-            target.write_text(content, encoding="utf-8", newline="")
+            changed.append(path)
             tools.write_artifact("release", path, content, path=path)
 
-        self._build_image(tools, workspace)
+        sha = workspace.commit("Prepare release")
+        if sha:
+            tools.log("release_committed", "Prepared release files", sha=sha,
+                      files=changed)
+        self._build_image(tools, workspace.path)
 
     def _build_image(self, tools: Tools, workspace: Path) -> None:
+        if config.MOCK_LLM:
+            tools.log("docker_build_skipped", "Docker build disabled in mock mode")
+            return
         if not (workspace / "Dockerfile").is_file():
             tools.log("docker_build_skipped", "No Dockerfile was generated")
             return
