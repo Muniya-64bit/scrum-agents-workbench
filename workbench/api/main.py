@@ -108,10 +108,12 @@ def advance(project_id: int, db: Session = Depends(get_session)):
 
 
 @app.post("/projects/{project_id}/approve", response_model=ProjectView)
-def approve(project_id: int, approved: bool = True, db: Session = Depends(get_session)):
+def approve(project_id: int, approved: bool = True, comment: str = "",
+            db: Session = Depends(get_session)):
+    """Clear the pending gate. `comment` (e.g. a reason for rejecting) is logged on the event."""
     _proj(db, project_id)
     try:
-        return _view(Orchestrator(db, AGENTS).approve(project_id, approved))
+        return _view(Orchestrator(db, AGENTS).approve(project_id, approved, comment))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
