@@ -7,7 +7,11 @@ Roles not listed fall back to StubAgent."""
 
 from workbench.agents.base import BaseAgent
 from workbench.agents.developer import DeveloperAgent
+from workbench.agents.qa import QAAgent
+
+_developer = DeveloperAgent()
 
 AGENTS: dict[str, BaseAgent] = {
-    "developer": DeveloperAgent(),
+    "developer": _developer,
+    "qa": QAAgent(developer=_developer),  # QA asks the Developer to fix the bugs it files
 }

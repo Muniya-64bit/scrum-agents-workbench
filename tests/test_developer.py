@@ -193,6 +193,8 @@ def test_registered_and_runs_in_orchestrator(db: Session, project: m.Project):
     o.step(project.id)  # backlog
     o.step(project.id)  # sprint planning (gate)
     o.approve(project.id)
-    o.step(project.id)  # execution: developer runs
+    o.step(project.id)  # execution: developer runs, then QA adds its tests
     assert repo.artifacts(db, project.id, "code")
-    assert len(Workspace(project.id).history()) == 1
+    history = Workspace(project.id).history()
+    assert history[-1].startswith("Story #")  # the Developer's commit is the first one
+    assert len(history) == 2  # plus QA's tests commit

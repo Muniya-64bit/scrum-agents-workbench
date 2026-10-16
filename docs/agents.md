@@ -69,6 +69,8 @@ AGENTS["product_owner"] = ProductOwnerAgent()
 | `write_artifact(kind, name, content, story_id, path, version)` | Save an artifact and link it to a story |
 | `report_bug(story_id, description)` | Open a bug for a story |
 | `record_fix_attempt(bug_id, fixed)` | Count a Developer fix attempt; `fixed` marks the bug fixed |
+| `reopen_bug(bug_id)` | QA re-tested a bug the Developer called fixed and it still fails |
+| `verify_bug(bug_id)` | QA re-tested the story and the bug no longer reproduces |
 | `log(kind, message, **payload)` | Add a custom event |
 
 ## Testing an agent
@@ -106,3 +108,21 @@ the project's sandbox workspace (`workbench/workspace.py`): a folder with its ow
   `MAX_FIX_RETRIES` (3) attempts the bug is skipped with a `bug_retry_limit` event.
 - With nothing to build, no LLM call is made (`code_skipped` event).
 - Tests use an autouse fixture in `tests/conftest.py` that points `WORKSPACES_DIR` at a temp dir.
+
+## QA agent
+`QAAgent` (`workbench/agents/qa.py`) runs after the Developer in the execution phase. For each
+sprint story that has code it:
+
+1. asks the LLM for pytest files under `tests/` (one test per acceptance criterion), commits them
+   to the workspace and saves them as `test` artifacts traced to the story. Files outside
+   `tests/` are rejected.
+2. runs them with `workbench/runner.py`: a pytest subprocess in the workspace with a 120 second
+   limit and no `ANTHROPIC_API_KEY` in its environment. The workspace is a plain directory, not a
+   container, so this guards against accidents rather than hostile code.
+3. files one `Bug` per failing test (no duplicates), and sets QA tasks to `testing` or `done`.
+4. while bugs are open and have attempts left, calls the Developer with `{"story_id": id}` and
+   tests again. The limit is `MAX_FIX_RETRIES` (3) attempts per bug. A bug the Developer marked
+   fixed that still fails is reopened; after the limit it stays open for a human.
+
+Every run logs a `test_run` event (`passed`, `failed`, `ok`) for the metrics views.
+`QAAgent(developer=None)` only reports bugs and never reruns the Developer.
