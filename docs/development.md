@@ -21,6 +21,21 @@ The default `MOCK_LLM=1` needs no API key.
 | `make test` | Run pytest |
 | `make lint` | Run ruff |
 
+## Environment variables
+| Variable | Default | Meaning |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | empty | Needed only with `MOCK_LLM=0` |
+| `WORKBENCH_MODEL` | `claude-sonnet-5-5` | Model used by all agents |
+| `MOCK_LLM` | `1` | `1` = deterministic canned responses, no API calls |
+| `DATABASE_URL` | `sqlite:///./workbench.db` | Database |
+| `WORKSPACES_DIR` | `./workspaces` | Where generated code is written |
+| `DEFAULT_MAX_FIX_RETRIES` | `3` | Developer attempts per bug in the first sprint |
+| `DEFAULT_CAPACITY` | `10` | Story points the first sprint commits to |
+| `MAX_SPRINTS` | `3` | The orchestrator stops starting new sprints after this many |
+| `LLM_PRICE_INPUT_PER_MTOK`, `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0`, `10.0` | USD per million tokens, for cost estimates |
+
+Later sprints take capacity and the retry limit from the retrospective (docs/agents.md).
+
 ## Team workflow
 1. Pick an issue and assign yourself. Labels show the day (`day-1` to `day-3`) and workstream (`ws1` to `ws6`).
 2. Branch from an up-to-date `main` as `feat/<issue>-short-name`.

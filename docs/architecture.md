@@ -61,6 +61,33 @@ stateDiagram-v2
 
 Roles without a registered agent fall back to `StubAgent`, which logs and does nothing.
 
+## Process improvement loop
+Each sprint is one Plan-Do-Check-Act cycle. The retrospective turns measured results into typed
+process changes (`ProcessChanges`), and the next sprint is planned with them. Nothing is stored in
+new tables: the process used is in the `sprint_planned` event, the proposal is in `Sprint.retro`.
+
+```mermaid
+flowchart LR
+  Plan["Plan<br/>sprint planning with ProcessConfig<br/>(sprint_planned.process)"] --> Do["Do<br/>execution: developer, QA"]
+  Do --> Check["Check<br/>review + sprint_metrics"]
+  Check --> Act["Act<br/>retro: process_changes,<br/>unfinished stories to backlog"]
+  Act -->|"next_process()"| Plan
+```
+
+The same loop is the Quality Improvement Paradigm (QIP) from the course:
+
+| QIP step | In the workbench |
+|---|---|
+| Characterize | Backlog, design and the metrics of earlier sprints (`metrics.py`) |
+| Set goals | GQM goals G1 to G4 (`docs/metrics.md`) |
+| Choose process | `ProcessConfig` (capacity, fix retries, test-first, working agreements) |
+| Execute | The sprint: planning, execution, review |
+| Analyze | Review and `sprint_metrics`, then the retrospective |
+| Package | The retro's changes stored in `Sprint.retro` and recorded in the next `sprint_planned.process` |
+
+Unfinished stories return to the backlog at the retro (`story_carried_over`) and are planned first.
+The levers and their bounds are in docs/agents.md.
+
 ## Data model
 ```mermaid
 erDiagram

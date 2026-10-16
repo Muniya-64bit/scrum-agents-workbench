@@ -84,7 +84,8 @@ AGENTS["product_owner"] = ProductOwnerAgent()
 | `create_sprint(goal, capacity)` | New active sprint, numbered automatically |
 | `add_story_to_sprint(sprint_id, story_id)` | Move a story into a sprint |
 | `snapshot_burndown(sprint_id)` | Record points remaining (feeds the burndown data) |
-| `save_retro(sprint_id, retro)` | Store went well / went wrong / actions and close the sprint |
+| `unplan_story(story_id, from_sprint_id)` | Return an unfinished story to the backlog (event `story_carried_over`) |
+| `save_retro(sprint_id, retro)` | Store went well / went wrong / actions / process changes / metrics and close the sprint |
 | `create_task(story_id, title, assignee)` | New task |
 | `update_task(task_id, status)` | `todo`, `doing`, `testing` or `done` |
 | `write_artifact(kind, name, content, story_id, path, version)` | Save an artifact and link it to a story |
@@ -169,9 +170,41 @@ it reads `task["phase"]` and delegates to a handler per phase (`SprintPlanner`, 
 - **Capacity is enforced in code.** `_select_stories` drops unknown ids and anything over capacity,
   because the LLM only proposes the sprint.
 - **Retro feeds the next sprint.** `SprintPlanner.build_prompt` adds the previous sprint's retro
-  actions to the prompt.
+  actions to the prompt, and the retro's typed process changes shape the plan (next section).
 - **Burndown** comes from `burndown_snapshot` events written at each stand-up. Read it with
   `repo.burndown(db, sprint)`.
+
+## Retrospective and process levers
+The retrospective changes how the next sprint runs, not only what is written in the prompt.
+`RetroAgent` returns `RetroOutput` with the usual lists plus `process_changes` (`ProcessChanges`,
+`workbench/schemas.py`). Code clamps the values (`workbench/process.py`); the LLM only proposes.
+
+| Lever | Bounds | Default | Effect |
+|---|---|---|---|
+| `capacity` | 3 to 40 points | `DEFAULT_CAPACITY` (10) | Points the next sprint may commit to (planning) |
+| `max_fix_retries` | 1 to 5 | `DEFAULT_MAX_FIX_RETRIES` (3) | Developer attempts per bug before QA leaves it open |
+| `test_first` | on / off | off | QA writes the acceptance tests before the Developer codes the story |
+| `guidelines` | 5 kept, 200 characters each | none | Working agreements added to every agent's prompt |
+
+- `ProcessConfig` holds the levers. `apply(changes)` returns the new config and a diff such as
+  `{"capacity": [10, 7], "test_first": [false, true]}` (only changed levers).
+- `suggest_process_changes(metrics, config)` is a rule-based advisor. The mock retro returns its
+  result, and the live retro prompt shows it as a suggestion. Rules: completed < committed lowers
+  the capacity to the completed points (floor 3); bugs or a first-pass yield below 100% switch
+  test-first on and add a working agreement; a bug that hit the retry limit raises the limit by 1.
+- The retro saves `Sprint.retro = {went_well, went_wrong, actions, process_changes, metrics}`.
+  `metrics` is the `sprint_metrics` dict at retro time. A sprint that already has a retro is not
+  reviewed again (event `retro_exists`).
+- **Carry-over.** Before saving, every story of the sprint that is not done goes back to the
+  backlog with `Tools.unplan_story` (event `story_carried_over {story_id, from_sprint_id}`). The
+  next planning lists it as "(carried over)" and keeps its tasks.
+- **Next sprint.** `process.next_process(db, project_id)` returns (config, diff, reason): the
+  latest sprint's process plus the retro's changes. `SprintPlanner` plans with its capacity unless
+  the task carries an explicit `capacity`, and logs
+  `sprint_planned {sprint_id, number, story_ids, committed_points, capacity, process,
+  process_changes, process_reason}`. When the diff is not empty it also logs
+  `process_changed {sprint_id, diff, reason}`. `process` is the process actually used, so the
+  metrics and the PDCA view can show it later.
 
 ## Architect
 `ArchitectAgent` (`workbench/agents/architect.py`) runs in two phases and delegates by
