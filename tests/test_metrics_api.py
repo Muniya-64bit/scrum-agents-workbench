@@ -80,7 +80,7 @@ def test_traceability_details(seeded):
     a, cc = rows[ids["stories"]["A"]], rows[ids["stories"]["C"]]
     assert a["complete"] is True and a["test_count"] == 2 and a["ac_count"] == 2
     assert a["last_test_ok"] is True and a["sprint_number"] == 1
-    assert a["design"][0]["name"] == "A design"
+    assert a["design"][0]["name"] == "A design" and a["design"][0]["version"] == 1
     assert cc["open_bugs"] == 0 and cc["tests_passed"] == 1 and cc["sprint_number"] == 2
     assert rows[ids["stories"]["B"]]["tests_failed"] == 0  # B's last run passed
     e = rows[extra]

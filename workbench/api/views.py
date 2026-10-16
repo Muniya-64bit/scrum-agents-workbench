@@ -104,6 +104,7 @@ class TraceItem(BaseModel):
     name: str
     kind: str
     path: str
+    version: int = 1
 
 
 class TraceRow(BaseModel):

@@ -194,7 +194,7 @@ def traceability(project_id: int, db: Session = Depends(get_session)):
         row = rows.get(link.story_id)
         if row is None:
             continue
-        item = TraceItem(artifact_id=a.id, name=a.name, kind=a.kind, path=a.path)
+        item = TraceItem(artifact_id=a.id, name=a.name, kind=a.kind, path=a.path, version=a.version)
         if a.kind in DESIGN_KINDS:
             row.design.append(item)
         elif a.kind in ("code", "test"):

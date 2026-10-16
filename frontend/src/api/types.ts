@@ -210,6 +210,7 @@ export interface TraceItem {
   name: string;
   kind: string;
   path: string;
+  version: number;
 }
 
 /** One row of the story -> design -> code -> test matrix. */
