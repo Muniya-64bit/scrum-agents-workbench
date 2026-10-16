@@ -39,6 +39,9 @@ sprint's window (see below).
 | `trace_completeness` | Committed stories with at least one design (`architecture`, `diagram`, `api_spec`, `design`), one `code` and one `test` artifact / committed stories | `trace_links` |
 | `ac_coverage` | Σ min(test functions, acceptance criteria) / Σ acceptance criteria. Test functions are the `def test_` lines of the newest version of each test file traced to the story | `trace_links`, artifacts |
 
+Trace completeness and AC coverage are also shown, per story, on the Traceability page
+(`/projects/:id/traceability`), where each gap is marked and every artifact can be opened.
+
 Ratios are `null` when the denominator is 0. Ratios are rounded to 3 decimals, money to 4
 decimals and seconds to 3.
 

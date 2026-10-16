@@ -29,6 +29,7 @@ CI runs typecheck, tests and build on every pull request.
 | `/projects/:id/board` | Kanban board for the latest sprint (or every task before planning) |
 | `/projects/:id/activity` | Live activity feed with agent filters, and the approval card at a gate |
 | `/projects/:id/metrics` | GQM dashboard: KPI tiles, burndown, velocity, quality, AI cost and the GQM goals ([metrics.md](metrics.md)) |
+| `/projects/:id/traceability` | Story → design → code → tests matrix with results, gaps and an artifact viewer. Filters (`?sprint=`, `?status=`, `?gaps=1`) are kept in the URL |
 | `/inbox` | Approval inbox: every project waiting at a gate, across projects |
 
 Every project page shows the phase bar and the phase controls: **Start &lt;next phase&gt;**, or
@@ -60,13 +61,14 @@ Rejecting asks for an optional reason, which is saved as the message of the `rej
 frontend/src/
   api/          client.ts (typed fetch wrapper, ApiError), types.ts (mirrors workbench/api/views.py)
   components/   AppShell (sidebar), PhaseBar, ActivityFeed, ApprovalCard, Avatar, Toast,
+                ArtifactDrawer (side panel with focus trap and Copy),
                 ui.tsx (Button, Badge, states), icons
   components/charts/  ChartFrame (axes, ticks), BurndownChart, BarChart (SVG, no library)
   lib/          format.ts (pct, usd, tokens, delta, duration), scrum.ts (labels),
                 events.ts (event text, times), useEventStream.ts (SSE),
                 useResource.ts (data loading), usePolling.ts, projectsChanged.ts, theme.ts
   pages/        ProjectsPage, ProjectLayout (header, phase controls, live stream), BacklogPage,
-                BoardPage, ActivityPage, MetricsPage, InboxPage
+                BoardPage, ActivityPage, MetricsPage, TraceabilityPage, InboxPage
   styles/       tokens.css (colors, light/dark), app.css
   test/         fake API (mockApi), fake EventSource, render helper, fixtures
 ```

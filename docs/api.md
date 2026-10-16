@@ -128,7 +128,8 @@ The change is logged as a `task_updated` event with agent `human`. An invalid st
 anything else goes in `other`. The other fields summarise the story's quality state.
 ```json
 [{"story_id": 2, "title": "Add todo", "status": "sprint",
-  "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": ""}],
+  "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": "",
+              "version": 1}],
   "code": [], "test": [], "other": [],
   "sprint_number": 1, "tests_passed": 2, "tests_failed": 0, "last_test_ok": true,
   "open_bugs": 0, "ac_count": 2, "test_count": 2, "complete": false}]
