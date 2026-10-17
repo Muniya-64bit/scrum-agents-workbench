@@ -196,7 +196,7 @@ sequenceDiagram
   Q->>W: commit "Tests for story #n" (from acceptance criteria and design)
   Q-->>D: tests_written_first
   D->>W: implement the story so the tests pass, commit "Story #n"
-  Q->>W: run the tests (stories with tests but no test_run are picked up)
+  Q->>W: run the tests (stories with tests but no test_run, or with code committed after their last test_run, are picked up)
 ```
 
 In that flow the QA prompt says "There is no implementation yet" and lists the story's design and

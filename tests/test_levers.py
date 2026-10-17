@@ -184,6 +184,23 @@ def test_qa_picks_stories_with_tests_that_never_ran(db: Session, project: m.Proj
     assert qa.stories_to_test(db, project.id, EXECUTION) == []
 
 
+def test_qa_retests_a_story_whose_code_changed_after_its_last_run(db: Session,
+                                                                  project: m.Project):
+    """A carried-over bug is fixed in the Developer's turn, before QA runs (issue #39)."""
+    developer = DeveloperAgent()
+    qa = QAAgent(developer=developer)
+    developer.run(db, project.id, EXECUTION)
+    qa.run(db, project.id, EXECUTION)
+    story = story_of(db, project)
+    assert qa.stories_to_test(db, project.id, EXECUTION) == []
+    bug = Tools(db, project.id, "qa").report_bug(story.id, "boom")  # open, tests ran before
+    developer.run(db, project.id, EXECUTION)  # fixes the bug and commits
+    assert db.get(m.Bug, bug.id).status == "fixed"
+    assert [s.id for s in qa.stories_to_test(db, project.id, EXECUTION)] == [story.id]
+    qa.run(db, project.id, EXECUTION)
+    assert qa.stories_to_test(db, project.id, EXECUTION) == []  # the run came after the commit
+
+
 # --- working agreements ---------------------------------------------------------------------
 
 

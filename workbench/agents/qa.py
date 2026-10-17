@@ -73,6 +73,22 @@ def _stories_with_runs(db: Session, project_id: int) -> set[int]:
             if e.kind == "test_run"}
 
 
+def _changed_since_run(db: Session, project_id: int) -> set[int]:
+    """Stories whose code was committed after their last test run, for example a carried-over
+    bug that the Developer fixed before QA's turn."""
+    committed: dict[int, int] = {}
+    ran: dict[int, int] = {}
+    for e in repo.events_since(db, project_id):
+        story_id = e.payload.get("story_id")
+        if story_id is None:
+            continue
+        if e.kind == "code_committed":
+            committed[story_id] = e.id
+        elif e.kind == "test_run":
+            ran[story_id] = e.id
+    return {sid for sid, event_id in committed.items() if event_id > ran.get(sid, 0)}
+
+
 class QAAgent(BaseAgent):
     role = "qa"
     system_prompt = SYSTEM_PROMPT
@@ -95,17 +111,19 @@ class QAAgent(BaseAgent):
     def stories_to_test(self, db: Session, project_id: int, task: dict,
                         max_retries: int | None = None) -> list[m.UserStory]:
         """`task["story_id"]` forces one story. Otherwise: sprint stories that have code and
-        either no tests yet, tests that never ran (written first) or open bugs."""
+        either no tests yet, tests that never ran (written first), code changed since the last
+        run or open bugs."""
         if task.get("story_id"):
             s = repo.get(db, m.UserStory, task["story_id"])
             return [s] if s and s.epic.project_id == project_id else []
         if max_retries is None:
             max_retries = fix_retry_limit(db, project_id, task)
         ran = _stories_with_runs(db, project_id)
+        changed = _changed_since_run(db, project_id)
         return [s for s in repo.backlog(db, project_id)
                 if s.sprint_id is not None and _has_code(db, project_id, s.id)
                 and (not _tests_for(db, project_id, s.id) or s.id not in ran
-                     or _fixable(_bugs(db, s.id), max_retries))]
+                     or s.id in changed or _fixable(_bugs(db, s.id), max_retries))]
 
     def run(self, db: Session, project_id: int, task: dict | None = None) -> BaseModel:
         task = task or {}
