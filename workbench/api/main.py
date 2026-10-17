@@ -86,8 +86,19 @@ def _sprint_view(s: m.Sprint) -> SprintView:
                       points=sum(st.points for st in s.stories))
 
 
+def _story_status(s: m.UserStory) -> str:
+    """The stored status, except that a story whose tasks are all done is reported as done."""
+    return "done" if repo.story_is_done(s) else s.status
+
+
+def _story_view(s: m.UserStory) -> StoryView:
+    view = StoryView.model_validate(s)
+    view.status = _story_status(s)
+    return view
+
+
 def _by_priority(stories) -> list[StoryView]:
-    return [StoryView.model_validate(s) for s in sorted(stories, key=lambda s: (s.priority, s.id))]
+    return [_story_view(s) for s in sorted(stories, key=lambda s: (s.priority, s.id))]
 
 
 # --- Projects and orchestration ---------------------------------------------------------------
@@ -194,7 +205,8 @@ def traceability(project_id: int, db: Session = Depends(get_session)):
     """Story -> design -> code -> test, one row per backlog story in priority order."""
     _proj(db, project_id)
     details = metrics.trace_details(db, project_id)
-    rows = {s.id: TraceRow(story_id=s.id, title=s.title, status=s.status, **details[s.id])
+    rows = {s.id: TraceRow(story_id=s.id, title=s.title, status=_story_status(s),
+                           **details[s.id])
             for s in repo.backlog(db, project_id)}
     for link, a in repo.trace_links(db, project_id):
         row = rows.get(link.story_id)

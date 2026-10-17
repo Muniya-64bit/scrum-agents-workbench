@@ -108,6 +108,8 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
                          "acceptance_criteria": ["Given ... When ... Then ..."],
                          "priority": 1, "points": 3, "status": "backlog"}]}]}
 ```
+A story's `status` is `backlog` or `sprint` as stored, and `done` once all its tasks are done (derived
+when the response is built; the same value is used in sprint details and the traceability rows).
 
 ## Sprints
 `GET /projects/1/sprints` returns

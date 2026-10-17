@@ -95,7 +95,11 @@ function StoryRow({ story }: { story: Story }) {
           <span className="story-title">{story.title}</span>
           <span className="story-meta">
             <Badge tone={PRIORITY_TONE[story.priority] ?? "neutral"}>P{story.priority}</Badge>
-            {story.sprint_id !== null && <Badge tone="doing">In sprint</Badge>}
+            {story.status === "done" ? (
+              <Badge tone="done">Done</Badge>
+            ) : (
+              story.sprint_id !== null && <Badge tone="doing">In sprint</Badge>
+            )}
             <span className="points" title="Story points">
               {story.points} pt
             </span>
