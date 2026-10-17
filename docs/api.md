@@ -96,7 +96,11 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
 `file_rejected`, `bug_fixed`, `bug_fix_failed`, `bug_retry_limit`, `tests_committed`, `test_run`,
 `tests_skipped`, `tests_missing`, `bug_reopened`, `bug_verified`, `bugs_left_open`,
 `sprint_planned`, `release_file_rejected`, `release_file_missing`, `release_file_unchanged`, `release_committed`,
-`docker_build_skipped`, `docker_build_succeeded`, `docker_build_failed`.
+`docker_build_skipped`, `docker_build_succeeded`, `docker_build_failed`, `vision_set`,
+`sprint_created`, `story_planned`, `sprint_skipped`, `story_carried_over`, `process_changed`,
+`burndown_snapshot`, `retro_saved`, `retro_exists`, `standup`, `tests_unchanged`,
+`tests_written_first`, `release_created`, `release_exists`, `release_skipped`,
+`llm_replay_drift`, `llm_replay_fallback`.
 
 ## Backlog
 `GET /projects/1/backlog`

@@ -18,6 +18,8 @@ setup is needed. Set `API_URL` to use a backend elsewhere: `API_URL=http://host:
 | `npm run typecheck` | TypeScript checks |
 | `npm test` | Vitest + Testing Library |
 | `npm run build` | Production build in `dist/` |
+| `npm run demo:video` | Record the scripted demo as `../demo/video/demo.webm` with Playwright (see [demo.md](demo.md); needs `npx playwright install chromium` once and free ports 8000 and 5173) |
+| `npm run typecheck:e2e` | Type-check the Playwright spec in `e2e/` |
 
 CI runs typecheck, tests and build on every pull request.
 

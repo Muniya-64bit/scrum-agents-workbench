@@ -24,7 +24,7 @@ flowchart LR
 | Orchestrator | `workbench/orchestrator/engine.py` | Phase order, approval gates, deciding which agents run |
 | Agents | `workbench/agents/` | One class per Scrum role; turn project state into LLM prompts and apply results |
 | Tools API | `workbench/agents/tools.py` | The only way agents change state; every call writes an Event |
-| LLM client | `workbench/llm/client.py` | Calls Claude, validates JSON against a schema, retries, caches, mock mode |
+| LLM client | `workbench/llm/client.py` | Calls Claude, validates JSON against a schema, retries, caches; mock, record and replay modes |
 | Data layer | `workbench/db/` | SQLAlchemy models, sessions, query helpers |
 | Contracts | `workbench/schemas.py` | Pydantic models for agent outputs |
 

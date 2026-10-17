@@ -9,8 +9,10 @@ each playing a Scrum role, takes it through the software development life cycle 
 produces real artifacts: backlog, design, code, tests and a release. A human approves the key
 ceremonies.
 
-> **Status:** Day 1 foundation is in place (data model, LLM wrapper, agent base class,
-> orchestrator, REST API). All six agents currently run as stubs; real agents are tracked in the
+> **Status:** All six agents are implemented and run end to end (idea to release, several sprints)
+> with a REST API, a web UI, GQM metrics, traceability, a retrospective that changes the process,
+> a scripted offline demo and a CI coverage gate. Live runs against the real model have not been
+> exercised end to end; open work is tracked in the
 > [issues](https://github.com/Muniya-64bit/scrum-agents-workbench/issues).
 
 ## Contents
@@ -35,7 +37,9 @@ ceremonies.
 - Retrospective levers that change the next sprint, a versioned release per sprint and a
   Plan-Do-Check-Act view of the improvement
 - Schema-validated agent output with retries, response caching and token usage logging
-- Mock mode (`MOCK_LLM=1`) so development and tests cost no tokens
+- Mock mode (`MOCK_LLM=1`) so development and tests cost no tokens, plus record/replay of LLM
+  answers keyed by meaning (`LLM_MODE`)
+- A scripted demo that plays three sprints offline, and a Playwright tour that records it as a video
 - Append-only event log that feeds the activity feed
 
 ## How it works
@@ -167,7 +171,11 @@ Set in `.env` (copy from `.env.example`).
 |---|---|---|
 | `ANTHROPIC_API_KEY` | empty | Claude API key, needed when `MOCK_LLM=0` |
 | `WORKBENCH_MODEL` | `claude-sonnet-5-5` | Model used by all agents |
-| `MOCK_LLM` | `1` | `1` returns canned output with no API calls |
+| `MOCK_LLM` | `1` | `1` returns canned output with no API calls (used when `LLM_MODE` is unset) |
+| `LLM_MODE` | from `MOCK_LLM` | `mock`, `live`, `record` or `replay` ([docs/development.md](docs/development.md#llm-modes)) |
+| `LLM_SCENARIO_DIR`, `LLM_REPLAY_FALLBACK` | empty, `error` | Scenario folder for record/replay; `mock` uses the mock answer when a recording is missing |
+| `DEFAULT_CAPACITY`, `DEFAULT_MAX_FIX_RETRIES`, `MAX_SPRINTS` | `10`, `3`, `3` | First sprint's points, Developer attempts per bug, sprints before the project ends |
+| `LLM_PRICE_INPUT_PER_MTOK`, `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0`, `10.0` | USD per million tokens for the cost estimate |
 | `DATABASE_URL` | `sqlite:///./workbench.db` | Database connection string |
 | `WORKSPACES_DIR` | `./workspaces` | Where generated project code is written |
 
@@ -189,6 +197,8 @@ Set in `.env` (copy from `.env.example`).
 | GET | `/projects/{id}/traceability` | Story -> design -> code -> test -> release |
 | GET | `/projects/{id}/releases` | Versioned release per sprint |
 | GET | `/projects/{id}/process` | Process levers now and for the next sprint |
+| GET | `/projects/{id}/metrics`, `/sprints/{id}/burndown` | GQM metrics, burndown series |
+| GET | `/projects/{id}/improvement` | One Plan-Do-Check-Act row per sprint |
 
 Full reference with examples: [docs/api.md](docs/api.md).
 
