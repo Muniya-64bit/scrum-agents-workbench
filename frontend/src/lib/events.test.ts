@@ -21,6 +21,56 @@ describe("describeEvent", () => {
     [ev("artifact_created", "app.py", { artifact_kind: "api_spec" }), "Wrote api spec “app.py”", "neutral"],
     [ev("bug_reported", "500 on save"), "Reported a bug: 500 on save", "danger"],
     [ev("code_committed", "Story #3: Add"), "Code committed: Story #3: Add", "neutral"],
+    [
+      ev("sprint_planned", "Sprint 2: 7 points committed", {
+        number: 2, committed_points: 7, story_ids: [3, 4],
+      }),
+      "Planned sprint 2: 7 points, 2 stories",
+      "accent",
+    ],
+    [
+      ev("process_changed", "Process changed", {
+        diff: { capacity: [10, 7], test_first: [false, true] },
+      }),
+      "Changed the process: capacity 10 → 7, test-first on",
+      "accent",
+    ],
+    [
+      ev("story_carried_over", "Delete an item", { story_id: 4, from_sprint_id: 1 }),
+      "Moved “Delete an item” back to the backlog for the next sprint",
+      "testing",
+    ],
+    [
+      ev("tests_written_first", "Tests written", { story_id: 4 }),
+      "Wrote the tests for story #4 before the code",
+      "accent",
+    ],
+    [
+      ev("release_created", "v0.1.0", { version: "v0.1.0", story_ids: [1, 2, 3] }),
+      "Released v0.1.0 with 3 stories",
+      "done",
+    ],
+    [
+      ev("release_created", "v0.2.0", { version: "v0.2.0", story_ids: [5] }),
+      "Released v0.2.0 with 1 story",
+      "done",
+    ],
+    [ev("release_exists", "v0.1.0", { version: "v0.1.0" }), "Release v0.1.0 already exists", "neutral"],
+    [
+      ev("release_skipped", "No sprint to release", { reason: "no sprint" }),
+      "Skipped the release: No sprint to release",
+      "testing",
+    ],
+    [
+      ev("llm_replay_drift", "", { key: "developer.DeveloperAgent.execution.s1", n: 1 }),
+      "The recorded answer for developer.DeveloperAgent.execution.s1 no longer matches the prompt",
+      "testing",
+    ],
+    [
+      ev("llm_replay_fallback", "", { key: "scrum_master.StandupAgent.review.s1", n: 1 }),
+      "No recorded answer for scrum_master.StandupAgent.review.s1; used the mock instead",
+      "testing",
+    ],
   ])("%#: %s", (event, text, tone) => {
     expect(describeEvent(event)).toEqual({ text, tone });
   });

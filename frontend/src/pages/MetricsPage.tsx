@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { ProjectMetrics, SprintMetrics } from "../api/types";
 import { BarChart } from "../components/charts/BarChart";
 import { BurndownChart } from "../components/charts/BurndownChart";
+import { PdcaPanel, ReleasesPanel } from "../components/ImprovementPanels";
 import { IconChart } from "../components/icons";
 import { EmptyState, ErrorState, Loading } from "../components/ui";
 import { delta, pct, pts, tokens, usd, type DeltaKind } from "../lib/format";
@@ -41,7 +42,8 @@ export function MetricsPage() {
       <QualityPanel sprints={data.sprints} />
       <CostPanel data={data} />
       <GqmPanel data={data} />
-      {/* 18D: Process improvement (PDCA) */}
+      <ReleasesPanel projectId={project.id} version={version} />
+      <PdcaPanel projectId={project.id} version={version} />
     </div>
   );
 }

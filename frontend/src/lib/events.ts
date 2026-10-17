@@ -1,4 +1,5 @@
 import type { ActivityEvent, Phase } from "../api/types";
+import { describeDiff } from "./process";
 import { phaseLabel, roleLabel, statusLabel } from "./scrum";
 
 export type EventTone = "neutral" | "accent" | "done" | "testing" | "danger";
@@ -68,6 +69,42 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
     }
     case "bug_reported":
       return { text: `Reported a bug: ${m}`, tone: "danger" };
+    case "sprint_planned": {
+      const stories = Array.isArray(e.payload.story_ids) ? e.payload.story_ids.length : 0;
+      return {
+        text: `Planned sprint ${e.payload.number ?? ""}: ${e.payload.committed_points ?? 0} points, ${stories} ${stories === 1 ? "story" : "stories"}`,
+        tone: "accent",
+      };
+    }
+    case "process_changed": {
+      const parts = describeDiff((e.payload.diff ?? {}) as Record<string, [unknown, unknown]>);
+      return { text: `Changed the process: ${parts.join(", ") || "no lever"}`, tone: "accent" };
+    }
+    case "story_carried_over":
+      return { text: `Moved ${q(m)} back to the backlog for the next sprint`, tone: "testing" };
+    case "tests_written_first":
+      return { text: `Wrote the tests for story #${e.payload.story_id} before the code`, tone: "accent" };
+    case "release_created": {
+      const n = Array.isArray(e.payload.story_ids) ? e.payload.story_ids.length : 0;
+      return {
+        text: `Released ${e.payload.version ?? m} with ${n} ${n === 1 ? "story" : "stories"}`,
+        tone: "done",
+      };
+    }
+    case "release_exists":
+      return { text: `Release ${e.payload.version ?? m} already exists`, tone: "neutral" };
+    case "release_skipped":
+      return { text: `Skipped the release: ${m || e.payload.reason}`, tone: "testing" };
+    case "llm_replay_drift":
+      return {
+        text: `The recorded answer for ${e.payload.key} no longer matches the prompt`,
+        tone: "testing",
+      };
+    case "llm_replay_fallback":
+      return {
+        text: `No recorded answer for ${e.payload.key}; used the mock instead`,
+        tone: "testing",
+      };
     default:
       return { text: `${humanize(e.kind)}${m ? `: ${m}` : ""}`, tone: "neutral" };
   }

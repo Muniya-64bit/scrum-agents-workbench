@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { backlog, project } from "../test/fixtures";
+import { backlog, processInfo, project } from "../test/fixtures";
 import { mockApi, renderApp } from "../test/utils";
 
 describe("BacklogPage", () => {
@@ -18,6 +18,18 @@ describe("BacklogPage", () => {
     await user.click(screen.getByText("Create an item"));
     expect(screen.getByText(/to add a to-do/)).toBeVisible();
     expect(screen.getByText("Given")).toHaveClass("gherkin");
+  });
+
+  it("shows the process levers of the current sprint", async () => {
+    mockApi({
+      "GET /projects/1": project,
+      "GET /projects/1/backlog": backlog,
+      "GET /projects/1/process": processInfo,
+    });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByText("Capacity 10")).toBeInTheDocument();
+    expect(screen.getByText("Fix retries 3")).toBeInTheDocument();
+    expect(screen.queryByText(/Next sprint/)).toBeNull(); // only at the retro and release
   });
 
   it("tells the user how to get a backlog when it is empty", async () => {

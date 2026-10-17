@@ -1,11 +1,20 @@
 import { useEffect, useRef } from "react";
 
 import type { Phase } from "../api/types";
-import { GATES, PHASES } from "../lib/scrum";
+import { GATES, PHASES, SPRINT_PHASES } from "../lib/scrum";
 import { IconCheck } from "./icons";
 
 /** The Scrum lifecycle as a stepper: finished phases ticked, current phase highlighted. */
-export function PhaseBar({ phase, awaitingApproval }: { phase: Phase; awaitingApproval: boolean }) {
+export function PhaseBar({
+  phase,
+  awaitingApproval,
+  sprintNumber = null,
+}: {
+  phase: Phase;
+  awaitingApproval: boolean;
+  /** The current sprint, shown next to the current phase while a sprint is running. */
+  sprintNumber?: number | null;
+}) {
   const current = PHASES.findIndex((p) => p.id === phase);
   const listRef = useRef<HTMLOListElement>(null);
 
@@ -36,6 +45,9 @@ export function PhaseBar({ phase, awaitingApproval }: { phase: Phase; awaitingAp
                 <span className="phase-gate" title="Needs human approval">
                   gate
                 </span>
+              )}
+              {state === "current" && sprintNumber !== null && SPRINT_PHASES.includes(p.id) && (
+                <span className="phase-sprint">Sprint {sprintNumber}</span>
               )}
             </span>
           </li>

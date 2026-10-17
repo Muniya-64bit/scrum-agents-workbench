@@ -26,6 +26,8 @@ export interface Project {
   idea: string;
   phase: Phase;
   awaiting_approval: boolean;
+  /** True at `release` when another sprint follows (see the orchestrator's sprint loop). */
+  has_more_sprints: boolean;
 }
 
 export interface Story {
@@ -248,6 +250,44 @@ export interface Artifact extends ArtifactSummary {
   story_ids: number[];
 }
 
+/** The levers a retrospective proposes (`Sprint.retro.process_changes`); null/absent keeps a lever. */
+export interface ProposedChanges {
+  capacity?: number | null;
+  max_fix_retries?: number | null;
+  test_first?: boolean | null;
+  add_guidelines?: string[];
+  reason?: string;
+}
+
+/** Measured results of a sprint, as compared in the PDCA view. */
+export interface ImprovementCheck {
+  commitment_reliability: number | null;
+  first_pass_yield: number | null;
+  test_pass_rate: number | null;
+  bugs_reported: number;
+  fix_attempts: number;
+  est_cost_usd: number;
+}
+
+/** One Plan-Do-Check-Act cycle (one sprint): `GET /projects/{id}/improvement`. */
+export interface ImprovementRow {
+  sprint_number: number;
+  plan: { process: Partial<ProcessConfig>; changes_applied: ProcessDiff; reason: string };
+  do: { committed_points: number; completed_points: number };
+  check: ImprovementCheck;
+  /** Change since the previous sprint; null for sprint 1 or when a value is missing. */
+  deltas: { [K in keyof ImprovementCheck]: number | null };
+  act: {
+    went_well: string[];
+    went_wrong: string[];
+    actions: string[];
+    proposed_changes: ProposedChanges;
+  };
+}
+
+/** Changed levers only, as [old, new] pairs. */
+export type ProcessDiff = Record<string, [unknown, unknown]>;
+
 /** One sprint release: `GET /projects/{id}/releases`. */
 export interface Release {
   artifact_id: number;
@@ -273,6 +313,6 @@ export interface ProcessInfo {
   current_sprint_number: number | null;
   next: ProcessConfig;
   /** Changed levers only, as [old, new] pairs. */
-  next_changes: Record<string, [unknown, unknown]>;
+  next_changes: ProcessDiff;
   next_reason: string;
 }

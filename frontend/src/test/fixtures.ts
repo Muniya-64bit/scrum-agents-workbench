@@ -2,6 +2,7 @@ import type {
   Artifact,
   Backlog,
   Burndown,
+  ImprovementRow,
   ProcessInfo,
   Project,
   ProjectMetrics,
@@ -20,6 +21,7 @@ export const project: Project = {
   idea: "A simple to-do app",
   phase: "execution",
   awaiting_approval: false,
+  has_more_sprints: false,
 };
 
 export const story: Story = {
@@ -286,3 +288,68 @@ export const processInfo: ProcessInfo = {
   next_changes: { capacity: [10, 7], test_first: [false, true] },
   next_reason: "Commit to last sprint's velocity",
 };
+
+export const improvementRows: ImprovementRow[] = [
+  {
+    sprint_number: 1,
+    plan: {
+      process: { capacity: 10, max_fix_retries: 1, test_first: false, guidelines: [] },
+      changes_applied: {},
+      reason: "",
+    },
+    do: { committed_points: 10, completed_points: 7 },
+    check: {
+      commitment_reliability: 0.7,
+      first_pass_yield: 0.333,
+      test_pass_rate: 0.8,
+      bugs_reported: 3,
+      fix_attempts: 2,
+      est_cost_usd: 0.04,
+    },
+    deltas: {
+      commitment_reliability: null,
+      first_pass_yield: null,
+      test_pass_rate: null,
+      bugs_reported: null,
+      fix_attempts: null,
+      est_cost_usd: null,
+    },
+    act: {
+      went_well: ["Clear goal"],
+      went_wrong: ["A bug hit the retry limit"],
+      actions: ["Write tests first"],
+      proposed_changes: {
+        capacity: 7,
+        test_first: true,
+        add_guidelines: ["Write the acceptance tests first"],
+        reason: "Commit to last sprint's velocity (yesterday's weather)",
+      },
+    },
+  },
+  {
+    sprint_number: 2,
+    plan: {
+      process: { capacity: 7, max_fix_retries: 2, test_first: true, guidelines: ["Tests first"] },
+      changes_applied: { capacity: [10, 7], test_first: [false, true] },
+      reason: "Commit to last sprint's velocity (yesterday's weather)",
+    },
+    do: { committed_points: 7, completed_points: 7 },
+    check: {
+      commitment_reliability: 1,
+      first_pass_yield: 1,
+      test_pass_rate: 1,
+      bugs_reported: 1,
+      fix_attempts: 3,
+      est_cost_usd: 0.05,
+    },
+    deltas: {
+      commitment_reliability: 0.3,
+      first_pass_yield: 0.667,
+      test_pass_rate: 0.2,
+      bugs_reported: -2,
+      fix_attempts: 1,
+      est_cost_usd: 0.01,
+    },
+    act: { went_well: ["Fewer bugs"], went_wrong: [], actions: [], proposed_changes: {} },
+  },
+];

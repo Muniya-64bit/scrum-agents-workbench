@@ -3,6 +3,7 @@ import type {
   Artifact,
   Backlog,
   Burndown,
+  ImprovementRow,
   ProcessInfo,
   Project,
   ProjectMetrics,
@@ -82,6 +83,7 @@ export const api = {
   artifact: (artifactId: number) => request<Artifact>(`/artifacts/${artifactId}`),
   releases: (id: number) => request<Release[]>(`/projects/${id}/releases`),
   process: (id: number) => request<ProcessInfo>(`/projects/${id}/process`),
+  improvement: (id: number) => request<ImprovementRow[]>(`/projects/${id}/improvement`),
 };
 
 /** URL for the live event stream (Server-Sent Events). */

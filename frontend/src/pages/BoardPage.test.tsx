@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { backlog, project, sprintDetail, sprint, tasks } from "../test/fixtures";
+import { backlog, processInfo, project, sprintDetail, sprint, tasks } from "../test/fixtures";
 import { mockApi, renderApp } from "../test/utils";
 
 const column = (name: string) => screen.getByRole("region", { name });
@@ -23,6 +23,19 @@ describe("BoardPage", () => {
     expect(within(column("Testing")).getByText("Test create item")).toBeInTheDocument();
     expect(within(column("Done")).getByText("Drop tasks here")).toBeInTheDocument();
     expect(screen.getByText("0 / 2 tasks done")).toBeInTheDocument();
+  });
+
+  it("shows the sprint's process and the change planned for the next sprint", async () => {
+    mockApi({
+      "GET /projects/1": { ...project, phase: "retro" },
+      "GET /projects/1/sprints": [sprint],
+      "GET /sprints/5": sprintDetail,
+      "GET /projects/1/process": processInfo,
+    });
+    renderApp("/projects/1/board");
+    const bar = await screen.findByRole("region", { name: "Sprint process" });
+    expect(within(bar).getByText("Capacity 10")).toBeInTheDocument();
+    expect(within(bar).getByText("Next sprint: capacity 10 → 7, test-first on")).toBeInTheDocument();
   });
 
   it("moves a task with the status menu and saves it", async () => {
