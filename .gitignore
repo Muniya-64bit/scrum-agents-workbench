@@ -4,6 +4,8 @@ __pycache__/
 .env
 *.db
 .pytest_cache/
+.coverage
+htmlcov/
 .ruff_cache/
 workspaces/
 node_modules/

@@ -1,12 +1,19 @@
+import atexit
 import os
+import shutil
+import tempfile
 
 os.environ["MOCK_LLM"] = "1"
 os.environ["LLM_MODE"] = "mock"
+# Even code that opens the app's own engine (API lifespan, scripts) must not reach ./workbench.db
+_SCRATCH = tempfile.mkdtemp(prefix="workbench-tests-")
+os.environ["DATABASE_URL"] = f"sqlite:///{_SCRATCH}/unused.db"
+atexit.register(shutil.rmtree, _SCRATCH, ignore_errors=True)
 
-import pytest
-from sqlalchemy.orm import sessionmaker
+import pytest  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from workbench.db.session import Base, init_db, make_engine
+from workbench.db.session import Base, init_db, make_engine  # noqa: E402
 
 
 @pytest.fixture

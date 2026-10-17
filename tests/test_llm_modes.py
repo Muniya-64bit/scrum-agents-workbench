@@ -116,6 +116,10 @@ def test_client_mode_resolution(reload_config):
         LLMClient(mode="nope")
 
 
+def test_mock_mode_without_a_mock_callable_builds_the_defaults():
+    assert LLMClient(mock=True).complete_json("s", "u", Answer) == Answer()
+
+
 # --- keys ------------------------------------------------------------------------------------
 
 

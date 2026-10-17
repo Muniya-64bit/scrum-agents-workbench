@@ -213,9 +213,12 @@ The full guide with a worked example is in [docs/agents.md](docs/agents.md).
 ## Testing and linting
 ```bash
 make test    # pytest
+make cov     # pytest with the coverage gate (total line coverage must stay at 95% or more)
 make lint    # ruff
 ```
-CI runs both on every pull request.
+CI runs lint, the tests with the coverage gate (`--cov-fail-under=95`) and the frontend checks on
+every pull request. Coverage is about 98% of `workbench/` today; the orchestrator, the Tools API,
+the base agent, the metrics engine and the release step are above 95%.
 
 ## Roadmap
 Three one-day sprints. See the issue labels `day-1`, `day-2` and `day-3`.

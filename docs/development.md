@@ -19,6 +19,7 @@ The default `MOCK_LLM=1` needs no API key.
 |---|---|
 | `make run` | Start the API with reload on port 8000 |
 | `make test` | Run pytest |
+| `make cov` | Run pytest with coverage; fails below 95% total line coverage (the CI gate) |
 | `make lint` | Run ruff |
 
 ## Environment variables
@@ -95,7 +96,11 @@ the team, because other workstreams build against them.
 
 ## Conventions
 - Line length 100, enforced by ruff.
-- Tests run with `MOCK_LLM=1` and an in-memory database (see `tests/conftest.py`).
+- Tests run with `MOCK_LLM=1` and an in-memory database (see `tests/conftest.py`). The app's own
+  engine points at a scratch file in tests, so no test creates `./workbench.db`.
+- Coverage: `python -m pytest -q --cov=workbench --cov-report=term-missing`. CI adds
+  `--cov-fail-under=95`. Mark a line `# pragma: no cover` only when it cannot run in a test, and say
+  why next to it.
 - Use type hints on public functions.
 
 ## Troubleshooting
