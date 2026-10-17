@@ -101,7 +101,9 @@ def test_defects_are_found_fixed_and_carried_over(story):
         "Filter by status"]
     bugs = db.query(m.Bug).order_by(m.Bug.id).all()
     assert [(b.story_id, b.status, b.retries) for b in bugs] == [(1, "fixed", 1), (4, "fixed", 2)]
-    assert "201" in bugs[0].description and "200" in bugs[1].description
+    assert "expected 422 for an empty title, got 201" in bugs[0].description
+    assert "expected 404 for an unknown id, got 200" in bugs[1].description
+    assert "TestClient object" not in bugs[1].description  # readable on the board and feed
     carried = events(db, project, "story_carried_over")
     assert [e.payload["story_id"] for e in carried] == [4]
     assert len(events(db, project, "bugs_left_open")) == 1
@@ -113,6 +115,8 @@ def test_releases_are_tagged_and_the_generated_app_passes_its_tests(story):
     db, project = story
     versions = [e.payload["version"] for e in events(db, project, "release_created")]
     assert versions == ["v0.1.0", "v0.2.0", "v0.3.0"]
+    finished = [e.message for e in events(db, project, "agent_finished") if e.agent == "devops"]
+    assert finished[-1] == "Released v0.3.0 with 1 story"
     ws = Workspace(project.id, project.workspaces_root)
     assert all(ws._tag_sha(v) for v in versions)
     result = runner.run_pytest(ws.path)

@@ -124,8 +124,8 @@ def test_submitting_a_title_creates_an_open_item():
 def test_an_empty_title_is_rejected():
     # Given an empty list When I submit an empty title
     # Then the API answers 422 and creates no item
-    response = client.post("/items", json={"title": ""})
-    assert response.status_code == 422
+    status = client.post("/items", json={"title": ""}).status_code
+    assert status == 422, f"expected 422 for an empty title, got {status}"
     assert items == {}
 '''),
     2: test_file(2, "List items", '''
@@ -172,7 +172,8 @@ def test_a_deleted_item_is_gone_from_the_list():
 def test_deleting_an_unknown_item_returns_404():
     # Given an unknown item id When I delete it Then the API answers 404
     add("Keep me")
-    assert client.delete("/items/9999").status_code == 404
+    status = client.delete("/items/9999").status_code
+    assert status == 404, f"expected 404 for an unknown id, got {status}"
     assert len(items) == 1
 '''),
     5: test_file(5, "Edit title", '''

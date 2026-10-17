@@ -134,4 +134,5 @@ class ReleaseAgent(BaseAgent):
             tools.link_artifact(art.id, done_ids, "release")
         tools.log("release_created", version, version=version, sha=sha, story_ids=done_ids,
                   artifact_id=art.id, sprint_id=sprint.id)
-        return f"Released {version} with {len(done_ids)} stories"
+        noun = "story" if len(done_ids) == 1 else "stories"
+        return f"Released {version} with {len(done_ids)} {noun}"
