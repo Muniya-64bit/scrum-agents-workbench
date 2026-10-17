@@ -21,6 +21,7 @@ ceremonies.
 - [API](#api)
 - [Project structure](#project-structure)
 - [Developing an agent](#developing-an-agent)
+- [Demo](#demo)
 - [Testing and linting](#testing-and-linting)
 - [Roadmap](#roadmap)
 - [Team and workflow](#team-and-workflow)
@@ -197,18 +198,30 @@ workbench/
   api/            FastAPI app
   agents/         BaseAgent, Tools API, registry (one module per real agent)
   db/             SQLAlchemy models, session, repository helpers
-  llm/            LLMClient: validation, retries, cache, mock mode
+  llm/            LLMClient: validation, retries, cache, mock / record / replay modes
   orchestrator/   Scrum state machine
   schemas.py      Shared agent output contracts
 tests/            pytest suite
 docs/             Architecture and Scrum process evidence
 frontend/         Web UI (React + Vite)
-scripts/          Demo seed and sample scripts
+scripts/          Demo runner (demo.py), scenario key lister, seed and sample scripts
+demo/scenarios/   Scripted demo scenarios (LLM answers as JSON)
 ```
 
 ## Developing an agent
 Subclass `BaseAgent`, register it in `workbench/agents/registry.py`, and test it in mock mode.
 The full guide with a worked example is in [docs/agents.md](docs/agents.md).
+
+## Demo
+A scripted scenario plays a whole project (three sprints, a caught bug, a carried-over story, a
+retrospective that changes the process, three tagged releases) offline and at no cost. The LLM
+answers are hand-written; everything else is real.
+
+```bash
+python scripts/demo.py run --scenario todo-app --fresh      # terminal, about 15 seconds
+python scripts/demo.py serve --scenario todo-app --fresh    # API for the UI (npm run dev in frontend/)
+```
+See [docs/demo.md](docs/demo.md).
 
 ## Testing and linting
 ```bash
@@ -250,6 +263,7 @@ retrospectives are in [docs/scrum](docs/scrum).
 | [docs/agents.md](docs/agents.md) | How to build an agent |
 | [docs/api.md](docs/api.md) | REST API reference |
 | [docs/frontend.md](docs/frontend.md) | Web UI: running it, structure, design tokens |
+| [docs/demo.md](docs/demo.md) | Run the scripted demo, write a scenario, record a real run |
 | [docs/metrics.md](docs/metrics.md) | GQM goals, questions and metrics, how they are computed, limits |
 | [docs/scrum](docs/scrum/README.md) | Our stand-ups and retrospectives |
 
