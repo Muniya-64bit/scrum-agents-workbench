@@ -1,0 +1,12 @@
+{
+  "name": "todo-app",
+  "project_name": "Todo app",
+  "idea": "A small to-do web API where users add, list, complete, edit, delete and filter to-do items.",
+  "source": "scripted",
+  "fallback": "mock",
+  "env": {
+    "DEFAULT_CAPACITY": "10",
+    "DEFAULT_MAX_FIX_RETRIES": "1",
+    "MAX_SPRINTS": "3"
+  }
+}

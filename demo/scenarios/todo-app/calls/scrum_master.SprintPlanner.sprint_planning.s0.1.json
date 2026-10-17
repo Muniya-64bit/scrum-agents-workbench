@@ -1,0 +1,62 @@
+{
+  "key": "scrum_master.SprintPlanner.sprint_planning.s0",
+  "n": 1,
+  "output": {
+    "goal": "A user can create, list, complete and delete to-do items",
+    "story_ids": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "summary": "Planned the 4 most important stories (10 points)",
+    "tasks": [
+      {
+        "assignee": "developer",
+        "story_id": 1,
+        "title": "Implement: Create item"
+      },
+      {
+        "assignee": "qa",
+        "story_id": 1,
+        "title": "Test: Create item"
+      },
+      {
+        "assignee": "developer",
+        "story_id": 2,
+        "title": "Implement: List items"
+      },
+      {
+        "assignee": "qa",
+        "story_id": 2,
+        "title": "Test: List items"
+      },
+      {
+        "assignee": "developer",
+        "story_id": 3,
+        "title": "Implement: Complete item"
+      },
+      {
+        "assignee": "qa",
+        "story_id": 3,
+        "title": "Test: Complete item"
+      },
+      {
+        "assignee": "developer",
+        "story_id": 4,
+        "title": "Implement: Delete item"
+      },
+      {
+        "assignee": "qa",
+        "story_id": 4,
+        "title": "Test: Delete item"
+      }
+    ]
+  },
+  "schema": "SprintPlanOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

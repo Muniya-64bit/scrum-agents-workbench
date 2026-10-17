@@ -11,3 +11,5 @@ workspaces/
 node_modules/
 dist/
 *.tsbuildinfo
+demo_runs/
+demo/video/

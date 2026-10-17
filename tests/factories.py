@@ -1,12 +1,39 @@
 """Builders for test data. `build_two_sprint_project` writes a known two-sprint history through
 `Tools`, so metrics tests can assert exact numbers (see tests/test_metrics.py)."""
 
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
+from workbench.agents.architect import ArchitectAgent
+from workbench.agents.base import BaseAgent
+from workbench.agents.developer import DeveloperAgent
+from workbench.agents.devops import DevOpsAgent
+from workbench.agents.product_owner import ProductOwnerAgent
+from workbench.agents.qa import QAAgent
+from workbench.agents.release import ReleaseAgent
+from workbench.agents.scrum_master import ScrumMasterAgent
 from workbench.agents.tools import Tools
 from workbench.db import repo
+from workbench.llm.client import LLMClient
 
 LIVE = {"llm_mode": "live", "model": "test-model", "duration_ms": 10}
+
+
+def agents_for(mode: str, scenario: Path, fallback: str = "error") -> dict[str, BaseAgent]:
+    """The registry's agents, each with its own LLM client in `mode` (record or replay)."""
+    def client() -> LLMClient:
+        return LLMClient(mode=mode, scenario_dir=scenario, fallback=fallback)
+
+    developer = DeveloperAgent(client())
+    return {
+        "product_owner": ProductOwnerAgent(client()),
+        "scrum_master": ScrumMasterAgent(client()),
+        "architect": ArchitectAgent(client()),
+        "developer": developer,
+        "qa": QAAgent(client(), developer=developer),
+        "devops": ReleaseAgent(builder=DevOpsAgent(client())),
+    }
 
 
 def _tasks(sm: Tools, story_id: int, title: str, with_qa: bool = True) -> dict:

@@ -1,0 +1,20 @@
+{
+  "key": "scrum_master.StandupAgent.review.s3",
+  "n": 1,
+  "output": {
+    "blockers": [],
+    "summary": "All 3 points are done",
+    "today": [
+      "Nothing left in the sprint"
+    ],
+    "yesterday": [
+      "Wrote the Filter by status tests first, then the code"
+    ]
+  },
+  "schema": "StandupOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "key": "scrum_master.StandupAgent.review.s2",
+  "n": 1,
+  "output": {
+    "blockers": [],
+    "summary": "All 6 points are done",
+    "today": [
+      "Nothing left in the sprint"
+    ],
+    "yesterday": [
+      "Fixed Delete item (404 for every unknown id)",
+      "Wrote the Edit title tests first, then the code"
+    ]
+  },
+  "schema": "StandupOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

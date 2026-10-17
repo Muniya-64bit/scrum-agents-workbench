@@ -11,15 +11,10 @@ import pytest
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from tests.factories import agents_for
 from workbench import config
-from workbench.agents.architect import ArchitectAgent
 from workbench.agents.base import BaseAgent
-from workbench.agents.developer import DeveloperAgent
-from workbench.agents.devops import DevOpsAgent
-from workbench.agents.product_owner import ProductOwnerAgent
-from workbench.agents.qa import QAAgent
-from workbench.agents.release import ReleaseAgent
-from workbench.agents.scrum_master import ScrumMasterAgent, SprintPlanner
+from workbench.agents.scrum_master import SprintPlanner
 from workbench.agents.tools import Tools
 from workbench.db import models as m
 from workbench.db import repo
@@ -281,21 +276,6 @@ def test_replay_validates_against_the_schema(tmp_path):
 # --- round trip ------------------------------------------------------------------------------
 
 
-def _agents(mode: str, scenario: Path) -> dict[str, BaseAgent]:
-    def client() -> LLMClient:
-        return LLMClient(mode=mode, scenario_dir=scenario)
-
-    developer = DeveloperAgent(client())
-    return {
-        "product_owner": ProductOwnerAgent(client()),
-        "scrum_master": ScrumMasterAgent(client()),
-        "architect": ArchitectAgent(client()),
-        "developer": developer,
-        "qa": QAAgent(client(), developer=developer),
-        "devops": ReleaseAgent(builder=DevOpsAgent(client())),
-    }
-
-
 def _outcome(db: Session, project_id: int) -> dict:
     events = repo.events_since(db, project_id)
     return {
@@ -321,7 +301,7 @@ def test_record_then_replay_gives_identical_outcomes(tmp_path, monkeypatch):
         init_db(engine)
         with sessionmaker(bind=engine, expire_on_commit=False)() as db:
             project = repo.create_project(db, "Todo application", "A small to-do app")
-            Orchestrator(db, _agents(mode, tmp_path / "scenario")).run_to_end(project.id)
+            Orchestrator(db, agents_for(mode, tmp_path / "scenario")).run_to_end(project.id)
             tagged = [v for v in _outcome(db, project.id)["releases"]
                       if Workspace(project.id)._tag_sha(v)]
             return _outcome(db, project.id), tagged, {

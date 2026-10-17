@@ -1,0 +1,27 @@
+{
+  "key": "devops.DevOpsAgent.release.s3",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "FROM python:3.12-slim\n\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\n\nEXPOSE 8000\nCMD [\"uvicorn\", \"app.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]\n",
+        "path": "Dockerfile"
+      },
+      {
+        "content": "name: CI\non:\n  push:\n  pull_request:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.12\"\n          cache: pip\n      - run: pip install -r requirements.txt\n      - run: pytest -q\n",
+        "path": ".github/workflows/ci.yml"
+      },
+      {
+        "content": "# Release notes: Todo app v0.3.0\n\n## Completed stories\n- #1 Create item\n- #2 List items\n- #3 Complete item\n- #4 Delete item\n- #5 Edit title\n- #6 Filter by status\n\n## Known issues\n- None\n",
+        "path": "RELEASE_NOTES.md"
+      }
+    ],
+    "summary": "Prepared Docker, CI and release notes for v0.3.0"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

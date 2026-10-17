@@ -1,0 +1,102 @@
+{
+  "key": "product_owner.ProductOwnerAgent.backlog.s0",
+  "n": 1,
+  "output": {
+    "epics": [
+      {
+        "description": "Create, list, complete, delete and edit.",
+        "stories": [
+          {
+            "acceptance_criteria": [
+              "Given an empty list When I submit the title 'Buy milk' Then a new open item is returned with status 201",
+              "Given an empty list When I submit an empty title Then the API answers 422 and creates no item"
+            ],
+            "as_a": "user",
+            "i_want": "to add a to-do item with a title",
+            "points": 3,
+            "priority": 1,
+            "so_that": "I can keep track of what I need to do",
+            "title": "Create item"
+          },
+          {
+            "acceptance_criteria": [
+              "Given three items When I list the items Then all three are returned in creation order",
+              "Given no items When I list the items Then an empty list is returned"
+            ],
+            "as_a": "user",
+            "i_want": "to see all my items",
+            "points": 2,
+            "priority": 1,
+            "so_that": "I know what is on my list",
+            "title": "List items"
+          },
+          {
+            "acceptance_criteria": [
+              "Given an open item When I mark it done Then it is returned as completed",
+              "Given an unknown item id When I mark it done Then the API answers 404"
+            ],
+            "as_a": "user",
+            "i_want": "to mark an item as done",
+            "points": 2,
+            "priority": 1,
+            "so_that": "I can see what is left",
+            "title": "Complete item"
+          },
+          {
+            "acceptance_criteria": [
+              "Given an item When I delete it Then it no longer appears in the list",
+              "Given an unknown item id When I delete it Then the API answers 404"
+            ],
+            "as_a": "user",
+            "i_want": "to delete an item",
+            "points": 3,
+            "priority": 2,
+            "so_that": "my list stays short",
+            "title": "Delete item"
+          },
+          {
+            "acceptance_criteria": [
+              "Given an item When I change its title Then the new title is returned and listed",
+              "Given an item When I change its title to an empty text Then the API answers 422 and the title stays",
+              "Given an unknown item id When I change its title Then the API answers 404"
+            ],
+            "as_a": "user",
+            "i_want": "to change the title of an item",
+            "points": 3,
+            "priority": 2,
+            "so_that": "I can fix typos",
+            "title": "Edit title"
+          }
+        ],
+        "title": "Manage to-dos"
+      },
+      {
+        "description": "Focus on what is left.",
+        "stories": [
+          {
+            "acceptance_criteria": [
+              "Given open and completed items When I filter by open Then only open items are listed",
+              "Given open and completed items When I filter by done Then only completed items are listed",
+              "Given any items When I filter by an unknown status Then the API answers 422"
+            ],
+            "as_a": "user",
+            "i_want": "to list only open or only completed items",
+            "points": 3,
+            "priority": 3,
+            "so_that": "I can focus on the work that is left",
+            "title": "Filter by status"
+          }
+        ],
+        "title": "Find to-dos"
+      }
+    ],
+    "summary": "Created a backlog with 2 epics and 6 stories (16 points)",
+    "vision": "A tiny to-do web API that lets people add, list, complete, edit, delete and filter their to-do items."
+  },
+  "schema": "BacklogOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

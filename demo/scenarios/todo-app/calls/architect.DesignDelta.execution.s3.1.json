@@ -1,0 +1,21 @@
+{
+  "key": "architect.DesignDelta.execution.s3",
+  "n": 1,
+  "output": {
+    "designs": [
+      {
+        "api_spec": "paths:\n  /items:\n    get:\n      parameters:\n        - { name: status, in: query, schema: { type: string } }\n      responses:\n        '200': { description: Items }\n        '422': { description: Unknown status }\n",
+        "diagram": "sequenceDiagram\n  U->>API: GET /items?status=open\n  API-->>U: 200 [open items]",
+        "notes": "## Filter by status\n- `GET /items` gets an optional `status` query parameter (`open` or `done`).\n- Any other value answers 422.\n",
+        "story_id": 6
+      }
+    ],
+    "summary": "Designed the story added in sprint 3"
+  },
+  "schema": "DesignDeltaOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}
