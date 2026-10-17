@@ -13,6 +13,7 @@ the result.
 | `build_prompt(db, project_id, task)` | yes | Read project state with `repo` and return the user prompt |
 | `mock_output(db, project_id, task)` | yes | A valid canned dict, used when `MOCK_LLM=1` |
 | `apply(tools, out, task)` | yes | Save the validated output using `Tools` only |
+| `llm_key(db, project_id, task)` | no | Name of the LLM call for record/replay (see below); the default is right for almost every agent |
 
 ## Lifecycle of `run()`
 ```mermaid
@@ -49,13 +50,28 @@ process can be measured (see [metrics.md](metrics.md)):
 |---|---|
 | `calls`, `input_tokens`, `output_tokens` | Model API calls and tokens of this run (0 in mock mode and on cache hits) |
 | `cache_hits`, `invalid_outputs` | Answers served from `.cache/llm/`; answers that failed schema validation and were retried |
-| `duration_ms`, `model`, `llm_mode` | Wall-clock time; model name; `mock` or `live` |
+| `duration_ms`, `model`, `llm_mode` | Wall-clock time; model name; `mock`, `live`, `record` or `replay` (`none` for the release step, which makes no LLM call) |
 | `story_id` | `task["story_id"]` when the run was for one story, else `null` |
 
 Other payload keys added for the metrics: `task_created` has `story_id` and `assignee`;
 `task_updated` has `status` and `story_id`; `bug_reported` has `story_id`. The Scrum Master logs
 `sprint_planned` (`sprint_id`, `number`, `story_ids`, `committed_points`, `capacity`) after
 planning; it marks the start of a sprint for the metrics.
+
+## Call keys (record and replay)
+`BaseAgent.run` names every LLM call with `llm_key`:
+`<role>.<class>.<phase>.s<sprint>[.<story slug>]`, for example
+`developer.DeveloperAgent.execution.s1.create-item` or `scrum_master.RetroAgent.retro.s2`. The
+sprint is `task["sprint_number"]`, else the current sprint's number, else 0; the story slug is the
+lowercase title with other characters turned into `-`, at most 40 characters. A key that repeats
+(a bug fix after the first build of the same story) gets a counter: `...create-item.1.json`,
+`...create-item.2.json`.
+
+Keys describe what the call is for, not what the prompt says. Recordings therefore survive
+prompt edits and refactors; if the prompt changed, `run` logs `llm_replay_drift` (`key`, `n`) and
+still serves the recorded answer. If no recording exists and `LLM_REPLAY_FALLBACK=mock`, `run`
+logs `llm_replay_fallback`. A new agent needs no extra code: the class name is part of the key.
+See [development.md](development.md#llm-modes).
 
 ## Example
 ```python

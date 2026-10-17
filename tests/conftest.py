@@ -1,6 +1,7 @@
 import os
 
 os.environ["MOCK_LLM"] = "1"
+os.environ["LLM_MODE"] = "mock"
 
 import pytest
 from sqlalchemy.orm import sessionmaker
