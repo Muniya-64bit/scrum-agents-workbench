@@ -31,6 +31,8 @@ ceremonies.
 - Scrum state machine with human approval gates at sprint planning and sprint review
 - Traceability matrix story → design → code → tests with an artifact viewer
 - Metrics dashboard (GQM): burndown, velocity, quality, AI cost
+- Retrospective levers that change the next sprint, a versioned release per sprint and a
+  Plan-Do-Check-Act view of the improvement
 - Schema-validated agent output with retries, response caching and token usage logging
 - Mock mode (`MOCK_LLM=1`) so development and tests cost no tokens
 - Append-only event log that feeds the activity feed
@@ -74,6 +76,15 @@ stateDiagram-v2
   release --> done
   done --> [*]
 ```
+
+### How the team improves each sprint
+The retrospective turns the sprint's measured results into typed process changes: the next
+capacity, the fix-retry limit, test-first and working agreements. Unfinished stories go back to the
+backlog. The next sprint is planned with those levers and records the process it used, and every
+sprint ends with a tagged release (`v0.1.0`, `v0.2.0`, ...). After a release the orchestrator plans
+another sprint while stories remain (at most `MAX_SPRINTS`). The Metrics page shows each sprint as
+a Plan-Do-Check-Act card, so you can see sprint 2 improve on sprint 1. See
+[docs/agents.md](docs/agents.md) and [docs/metrics.md](docs/metrics.md).
 
 ### One sprint, step by step
 ```mermaid

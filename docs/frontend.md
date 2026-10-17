@@ -29,8 +29,14 @@ CI runs typecheck, tests and build on every pull request.
 | `/projects/:id/board` | Kanban board for the latest sprint (or every task before planning) |
 | `/projects/:id/activity` | Live activity feed with agent filters, and the approval card at a gate |
 | `/projects/:id/metrics` | GQM dashboard: KPI tiles, burndown, velocity, quality, AI cost and the GQM goals ([metrics.md](metrics.md)) |
+| `/projects/:id/metrics` (lower sections) | Releases table (version opens the notes in the drawer) and "Process improvement (PDCA)": one Plan / Do / Check / Act card per sprint with delta badges (arrow, sign, colour) and chips for the retro's proposed changes |
 | `/projects/:id/traceability` | Story → design → code → tests → release matrix with results, gaps and an artifact viewer. Filters (`?sprint=`, `?status=`, `?gaps=1`) are kept in the URL |
 | `/inbox` | Approval inbox: every project waiting at a gate, across projects |
+
+The phase bar shows "Sprint N" next to the current phase, and Board and Backlog show the sprint's
+process as chips (capacity, test-first, fix retries, agreements) plus "Next sprint: ..." at the
+retro and release. After a release with more sprints to come the button reads **Start Sprint
+planning**.
 
 Every project page shows the phase bar and the phase controls: **Start &lt;next phase&gt;**, or
 **Approve / Reject** when the project waits at a gate.

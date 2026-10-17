@@ -66,6 +66,14 @@ the next one starts (retro, release) is charged to that sprint.
 number of seconds since sprint start. In a fast mock run all points are within a second of each
 other, so the UI plots the step number instead when the sprint lasted less than a second.
 
+## Process improvement (PDCA)
+`GET /projects/{id}/improvement` returns one row per sprint: `plan` (the process used, the changes
+applied to get it and why), `do` (committed and completed points), `check` (commitment
+reliability, first-pass yield, test pass rate, bugs reported, fix attempts, estimated cost) and
+`deltas` (check minus the previous sprint, `null` for sprint 1 or missing values), and `act` (the
+retro's lists and the process changes it proposed). The Metrics page draws each row as a card.
+Better means higher for the three ratios and lower for bugs, fix attempts and cost.
+
 ## Limitations
 - In mock mode no tokens are spent, so usage and cost are zero. Mock runs report `llm_mode: mock`.
 - Cost is an estimate: tokens times the prices in `LLM_PRICE_INPUT_PER_MTOK` and

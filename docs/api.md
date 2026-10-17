@@ -206,3 +206,19 @@ Ratios are `null` when they are undefined (for example no test ran). Unknown pro
 ```
 
 `artifact_created`, `artifact_linked`, `design_skipped`, `design_missing`, `bug_reported`.
+
+## Improvement
+`GET /projects/1/improvement` returns one Plan-Do-Check-Act row per sprint (see
+[metrics.md](metrics.md)). Unknown project: 404. `GET /projects/{id}` also has `has_more_sprints`,
+true only while the project is at `release` and another sprint will follow.
+```json
+[{"sprint_number": 2,
+  "plan": {"process": {"capacity": 7, "max_fix_retries": 2, "test_first": true, "guidelines": []},
+           "changes_applied": {"capacity": [10, 7]}, "reason": "..."},
+  "do": {"committed_points": 7, "completed_points": 7},
+  "check": {"commitment_reliability": 1.0, "first_pass_yield": 1.0, "test_pass_rate": 1.0,
+            "bugs_reported": 1, "fix_attempts": 3, "est_cost_usd": 0.05},
+  "deltas": {"commitment_reliability": 0.3, "first_pass_yield": 0.667, "test_pass_rate": 0.2,
+             "bugs_reported": -2, "fix_attempts": 1, "est_cost_usd": 0.01},
+  "act": {"went_well": [], "went_wrong": [], "actions": [], "proposed_changes": {}}}]
+```

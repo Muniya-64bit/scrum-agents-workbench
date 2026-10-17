@@ -44,9 +44,15 @@ stateDiagram-v2
   execution --> review
   review --> retro: human approves
   retro --> release
+  release --> sprint_planning: stories left and fewer than MAX_SPRINTS sprints
   release --> done
   done --> [*]
 ```
+
+The loop edge is `Orchestrator.next_phase`: after `release` it returns to `sprint_planning` while
+`more_sprints` holds (a story that fits the next capacity is unplanned and fewer than
+`MAX_SPRINTS` sprints ran). `run_to_end` stops with an error after 200 steps. `ProjectView.
+has_more_sprints` tells the UI which button label to show at the release.
 
 `PHASE_AGENTS` in `engine.py` maps each phase to the agent roles that run in it:
 
@@ -90,6 +96,10 @@ The same loop is the Quality Improvement Paradigm (QIP) from the course:
 | Execute | The sprint: planning, execution, review |
 | Analyze | Review and `sprint_metrics`, then the retrospective |
 | Package | The retro's changes stored in `Sprint.retro` and recorded in the next `sprint_planned.process` |
+
+The Metrics page shows the cycle for every sprint (`GET /projects/{id}/improvement`): Plan is the
+process in `sprint_planned`, Do is committed vs completed points, Check the metrics with their
+change since the previous sprint, Act the retro's proposal.
 
 Unfinished stories return to the backlog at the retro (`story_carried_over`) and are planned first.
 The levers and their bounds are in docs/agents.md. Agents read the sprint's process from the
