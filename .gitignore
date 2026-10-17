@@ -13,3 +13,5 @@ dist/
 *.tsbuildinfo
 demo_runs/
 demo/video/
+test-results/
+playwright-report/
