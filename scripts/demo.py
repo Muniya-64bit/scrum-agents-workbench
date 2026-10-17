@@ -42,7 +42,7 @@ def _force_remove(func, path, _exc):
 def remove_run(name: str) -> None:
     for target in (RUNS / f"{name}.db", RUNS / f"{name}-workspaces"):
         if target.is_dir():
-            shutil.rmtree(target, onerror=_force_remove)
+            shutil.rmtree(target, onexc=_force_remove)
         elif target.exists():
             target.unlink()
 
