@@ -1,0 +1,19 @@
+{
+  "key": "developer.DeveloperAgent.execution.s2.edit-title",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "\"\"\"Todo API: an in-memory list of to-do items.\"\"\"\n\nimport itertools\n\nfrom fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\n\napp = FastAPI(title=\"Todo app\")\nitems: dict[int, dict] = {}\n_ids = itertools.count(1)\n\n\nclass NewItem(BaseModel):\n    title: str\n\n\n@app.post(\"/items\", status_code=201)\ndef create_item(body: NewItem) -> dict:\n    if not body.title.strip():\n        raise HTTPException(422, \"title must not be empty\")\n    item = {\"id\": next(_ids), \"title\": body.title.strip(), \"done\": False}\n    items[item[\"id\"]] = item\n    return item\n\n\n@app.get(\"/items\")\ndef list_items() -> list[dict]:\n    return list(items.values())\n\n\n@app.post(\"/items/{item_id}/complete\")\ndef complete_item(item_id: int) -> dict:\n    item = items.get(item_id)\n    if item is None:\n        raise HTTPException(404, \"item not found\")\n    item[\"done\"] = True\n    return item\n\n\n@app.delete(\"/items/{item_id}\")\ndef delete_item(item_id: int) -> dict:\n    if item_id not in items:\n        raise HTTPException(404, \"item not found\")\n    del items[item_id]\n    return {\"deleted\": item_id}\n\n\nclass ItemUpdate(BaseModel):\n    title: str\n\n\n@app.patch(\"/items/{item_id}\")\ndef edit_item(item_id: int, body: ItemUpdate) -> dict:\n    item = items.get(item_id)\n    if item is None:\n        raise HTTPException(404, \"item not found\")\n    if not body.title.strip():\n        raise HTTPException(422, \"title must not be empty\")\n    item[\"title\"] = body.title.strip()\n    return item\n",
+        "path": "app/main.py"
+      }
+    ],
+    "summary": "Added PATCH /items/{id}"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

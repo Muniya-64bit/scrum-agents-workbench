@@ -1,0 +1,19 @@
+{
+  "key": "qa.QAAgent.execution.s1.create-item",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "\"\"\"Tests for story 1: Create item (acceptance criteria as Given/When/Then comments).\"\"\"\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom app.main import app, items\n\nclient = TestClient(app)\n\n\n@pytest.fixture(autouse=True)\ndef clean_state():\n    items.clear()\n    yield\n    items.clear()\n\n\ndef add(title):\n    return client.post(\"/items\", json={\"title\": title}).json()\n\n\ndef test_submitting_a_title_creates_an_open_item():\n    # Given an empty list When I submit the title 'Buy milk'\n    # Then a new open item is returned with status 201\n    response = client.post(\"/items\", json={\"title\": \"Buy milk\"})\n    assert response.status_code == 201\n    body = response.json()\n    assert body[\"title\"] == \"Buy milk\" and body[\"done\"] is False\n    assert body[\"id\"] in items\n\n\ndef test_an_empty_title_is_rejected():\n    # Given an empty list When I submit an empty title\n    # Then the API answers 422 and creates no item\n    status = client.post(\"/items\", json={\"title\": \"\"}).status_code\n    assert status == 422, f\"expected 422 for an empty title, got {status}\"\n    assert items == {}\n",
+        "path": "tests/test_story_1.py"
+      }
+    ],
+    "summary": "Wrote the acceptance tests for story 1"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

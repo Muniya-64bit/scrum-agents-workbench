@@ -1,0 +1,19 @@
+{
+  "key": "qa.QAAgent.execution.s1.list-items",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "\"\"\"Tests for story 2: List items (acceptance criteria as Given/When/Then comments).\"\"\"\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom app.main import app, items\n\nclient = TestClient(app)\n\n\n@pytest.fixture(autouse=True)\ndef clean_state():\n    items.clear()\n    yield\n    items.clear()\n\n\ndef add(title):\n    return client.post(\"/items\", json={\"title\": title}).json()\n\n\ndef test_items_are_listed_in_creation_order():\n    # Given three items When I list the items Then all three are returned in creation order\n    for title in (\"First\", \"Second\", \"Third\"):\n        add(title)\n    response = client.get(\"/items\")\n    assert response.status_code == 200\n    assert [i[\"title\"] for i in response.json()] == [\"First\", \"Second\", \"Third\"]\n\n\ndef test_an_empty_list_is_returned_when_there_are_no_items():\n    # Given no items When I list the items Then an empty list is returned\n    response = client.get(\"/items\")\n    assert response.status_code == 200\n    assert response.json() == []\n",
+        "path": "tests/test_story_2.py"
+      }
+    ],
+    "summary": "Wrote the acceptance tests for story 2"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

@@ -91,14 +91,14 @@ def test_design_delta_drops_unknown_story_ids(db: Session, project: m.Project, m
                                     {"story_id": first.id, "notes": "real"},
                                     {"story_id": first.id, "notes": "duplicate"}]})
     llm = LLMClient(mock=False, use_cache=False)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: reply)
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: reply)
     ArchitectAgent(llm).run(db, project.id, EXECUTION)
     assert [a.content for a in _kinds(db, project.id, "design")] == ["real"]
 
 
 def test_story_skipped_by_llm_is_logged(db: Session, project: m.Project, monkeypatch):
     llm = LLMClient(mock=False, use_cache=False)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: '{"designs": []}')
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: '{"designs": []}')
     ArchitectAgent(llm).run(db, project.id, EXECUTION)
     assert "design_missing" in [e.kind for e in repo.events_since(db, project.id)]
 
@@ -108,7 +108,7 @@ def test_invalid_mermaid_is_retried(db: Session, project: m.Project, tmp_path, m
     bad = {**good, "diagrams": [{"name": "x", "mermaid": "not a diagram"}]}
     replies = iter([json.dumps(bad), json.dumps(good)])
     llm = LLMClient(mock=False, use_cache=False)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: next(replies))
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: next(replies))
     ArchitectAgent(llm).run(db, project.id, BACKLOG)
     assert len(_kinds(db, project.id, "diagram")) == 3
 

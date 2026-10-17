@@ -1,11 +1,18 @@
 import type {
   ActivityEvent,
+  Artifact,
   Backlog,
+  Burndown,
+  ImprovementRow,
+  ProcessInfo,
   Project,
+  ProjectMetrics,
+  Release,
   Sprint,
   SprintDetail,
   Task,
   TaskStatus,
+  TraceRow,
 } from "./types";
 
 /** All requests go to /api; the Vite dev server proxies that to the FastAPI backend. */
@@ -69,6 +76,14 @@ export const api = {
   tasks: (id: number) => request<Task[]>(`/projects/${id}/tasks`),
   updateTask: (taskId: number, status: TaskStatus) =>
     request<Task>(`/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+
+  burndown: (sprintId: number) => request<Burndown>(`/sprints/${sprintId}/burndown`),
+  metrics: (id: number) => request<ProjectMetrics>(`/projects/${id}/metrics`),
+  traceability: (id: number) => request<TraceRow[]>(`/projects/${id}/traceability`),
+  artifact: (artifactId: number) => request<Artifact>(`/artifacts/${artifactId}`),
+  releases: (id: number) => request<Release[]>(`/projects/${id}/releases`),
+  process: (id: number) => request<ProcessInfo>(`/projects/${id}/process`),
+  improvement: (id: number) => request<ImprovementRow[]>(`/projects/${id}/improvement`),
 };
 
 /** URL for the live event stream (Server-Sent Events). */

@@ -13,6 +13,7 @@ the result.
 | `build_prompt(db, project_id, task)` | yes | Read project state with `repo` and return the user prompt |
 | `mock_output(db, project_id, task)` | yes | A valid canned dict, used when `MOCK_LLM=1` |
 | `apply(tools, out, task)` | yes | Save the validated output using `Tools` only |
+| `llm_key(db, project_id, task)` | no | Name of the LLM call for record/replay (see below); the default is right for almost every agent |
 
 ## Lifecycle of `run()`
 ```mermaid
@@ -26,8 +27,51 @@ sequenceDiagram
   A->>L: complete_json(system, prompt, schema)
   L-->>A: validated output (or LLMError)
   A->>T: apply() creates stories, tasks, artifacts
-  A->>T: log agent_finished
+  A->>T: log agent_finished (LLM usage, duration)
 ```
+
+**Working agreements.** Before the LLM call, `BaseAgent.run` appends the team's working
+agreements to the prompt when the process has any (Product Owner excluded: it runs before any
+retrospective). The block is the last thing in the prompt:
+
+```
+Team working agreements (from the last retrospective):
+- Write the acceptance tests first and make them pass before committing
+```
+
+The agreements come from `process.effective_process(db, project_id, task["phase"])`: in sprint
+planning the process the retro just decided, in every other phase the sprint's own process.
+
+## What `run()` logs
+`agent_started`, then `agent_finished` with the usage of this run, so the cost and speed of the
+process can be measured (see [metrics.md](metrics.md)):
+
+| Payload key | Meaning |
+|---|---|
+| `calls`, `input_tokens`, `output_tokens` | Model API calls and tokens of this run (0 in mock mode and on cache hits) |
+| `cache_hits`, `invalid_outputs` | Answers served from `.cache/llm/`; answers that failed schema validation and were retried |
+| `duration_ms`, `model`, `llm_mode` | Wall-clock time; model name; `mock`, `live`, `record` or `replay` (`none` for the release step, which makes no LLM call) |
+| `story_id` | `task["story_id"]` when the run was for one story, else `null` |
+
+Other payload keys added for the metrics: `task_created` has `story_id` and `assignee`;
+`task_updated` has `status` and `story_id`; `bug_reported` has `story_id`. The Scrum Master logs
+`sprint_planned` (`sprint_id`, `number`, `story_ids`, `committed_points`, `capacity`) after
+planning; it marks the start of a sprint for the metrics.
+
+## Call keys (record and replay)
+`BaseAgent.run` names every LLM call with `llm_key`:
+`<role>.<class>.<phase>.s<sprint>[.<story slug>]`, for example
+`developer.DeveloperAgent.execution.s1.create-item` or `scrum_master.RetroAgent.retro.s2`. The
+sprint is `task["sprint_number"]`, else the current sprint's number, else 0; the story slug is the
+lowercase title with other characters turned into `-`, at most 40 characters. A key that repeats
+(a bug fix after the first build of the same story) gets a counter: `...create-item.1.json`,
+`...create-item.2.json`.
+
+Keys describe what the call is for, not what the prompt says. Recordings therefore survive
+prompt edits and refactors; if the prompt changed, `run` logs `llm_replay_drift` (`key`, `n`) and
+still serves the recorded answer. If no recording exists and `LLM_REPLAY_FALLBACK=mock`, `run`
+logs `llm_replay_fallback`. A new agent needs no extra code: the class name is part of the key.
+See [development.md](development.md#llm-modes).
 
 ## Example
 ```python
@@ -68,7 +112,8 @@ AGENTS["product_owner"] = ProductOwnerAgent()
 | `create_sprint(goal, capacity)` | New active sprint, numbered automatically |
 | `add_story_to_sprint(sprint_id, story_id)` | Move a story into a sprint |
 | `snapshot_burndown(sprint_id)` | Record points remaining (feeds the burndown data) |
-| `save_retro(sprint_id, retro)` | Store went well / went wrong / actions and close the sprint |
+| `unplan_story(story_id, from_sprint_id)` | Return an unfinished story to the backlog (event `story_carried_over`) |
+| `save_retro(sprint_id, retro)` | Store went well / went wrong / actions / process changes / metrics and close the sprint |
 | `create_task(story_id, title, assignee)` | New task |
 | `update_task(task_id, status)` | `todo`, `doing`, `testing` or `done` |
 | `write_artifact(kind, name, content, story_id, path, version)` | Save an artifact and link it to a story |
@@ -110,7 +155,13 @@ the project's sandbox workspace (`workbench/workspace.py`): a folder with its ow
 - **Unsafe paths** (absolute, `..`, `.git`) are not written; each gets a `file_rejected` event.
 - **Bug fixes:** every attempt increments `Bug.retries`. A commit marks the bug `fixed`; QA reopens
   it if the tests still fail. With no change the bug stays open (`bug_fix_failed`). After
-  `MAX_FIX_RETRIES` (3) attempts the bug is skipped with a `bug_retry_limit` event.
+  the sprint's `max_fix_retries` attempts (`MAX_FIX_RETRIES`, 3, when the process does not say
+  otherwise) the bug is skipped with a `bug_retry_limit` event. The limit is resolved once per run
+  from `task["max_fix_retries"]`, else `process.effective_process(...)`; QA passes its value on.
+- **Test-first.** When the sprint's process has `test_first` on and the story has no code and no
+  tests, the Developer first calls `self.test_writer` (set by `QAAgent`), then builds the story.
+  The prompt gains "Tests you must make pass (do not edit them):" with the latest test files,
+  outside the file budget.
 - With nothing to build, no LLM call is made (`code_skipped` event).
 - Tests use an autouse fixture in `tests/conftest.py` that points `WORKSPACES_DIR` at a temp dir.
 
@@ -125,12 +176,31 @@ sprint story that has code it:
    limit and no `ANTHROPIC_API_KEY` in its environment. The workspace is a plain directory, not a
    container, so this guards against accidents rather than hostile code.
 3. files one `Bug` per failing test (no duplicates), and sets QA tasks to `testing` or `done`.
-4. while bugs are open and have attempts left, calls the Developer with `{"story_id": id}` and
-   tests again. The limit is `MAX_FIX_RETRIES` (3) attempts per bug. A bug the Developer marked
-   fixed that still fails is reopened; after the limit it stays open for a human.
+4. while bugs are open and have attempts left, calls the Developer with `{"story_id": id,
+   "max_fix_retries": n}` and tests again. The limit is the sprint's `max_fix_retries`
+   (`MAX_FIX_RETRIES`, 3, by default) attempts per bug. A bug the Developer marked fixed that
+   still fails is reopened; after the limit it stays open for a human.
 
 Every run logs a `test_run` event (`passed`, `failed`, `ok`) for the metrics views.
 `QAAgent(developer=None)` only reports bugs and never reruns the Developer.
+
+**Test-first flow.** `QAAgent.__init__` sets `developer.test_writer = self.write_tests`. With the
+`test_first` lever on, the Developer asks QA for the tests before it codes:
+
+```mermaid
+sequenceDiagram
+  participant D as Developer
+  participant Q as QA
+  participant W as Workspace
+  D->>Q: write_tests(story) (no code, no tests yet)
+  Q->>W: commit "Tests for story #n" (from acceptance criteria and design)
+  Q-->>D: tests_written_first
+  D->>W: implement the story so the tests pass, commit "Story #n"
+  Q->>W: run the tests (stories with tests but no test_run, or with code committed after their last test_run, are picked up)
+```
+
+In that flow the QA prompt says "There is no implementation yet" and lists the story's design and
+API spec instead of the code.
 
 ## DevOps agent
 `DevOpsAgent` (`workbench/agents/devops.py`) runs in the release phase after QA and the review
@@ -144,6 +214,34 @@ gate. It uses the same per-project `Workspace` as Developer and QA.
 - In real-model mode, Docker is built when available. Mock-mode runs skip the external build so
   tests remain deterministic. Success, failure and skipped builds are recorded as events.
 
+## Release step
+Every sprint ends with a versioned release. The registered `devops` agent is `ReleaseAgent`
+(`workbench/agents/release.py`), which wraps the DevOps agent above as its builder:
+`AGENTS["devops"] = ReleaseAgent(builder=DevOpsAgent())`. To use another builder, pass any
+`BaseAgent`; with `builder=None` only the versioned part runs.
+
+What `ReleaseAgent` adds on top of the DevOps agent, in order:
+
+1. **Version** `v0.<sprint number>.0` for the current sprint.
+2. The builder runs (Dockerfile, CI workflow, `RELEASE_NOTES.md`, commit `Prepare release`).
+3. **Release notes** from `release_notes(db, project_id, sprint, version, ws)`, built from the
+   database and the git history without an LLM, written to `releases/<version>.md` and committed as
+   `Release <version>`.
+4. **Git tag** `<version>` (annotated) in the sandbox repository.
+5. A `release` artifact `Release <version>`, **traced** to every story completed in the sprint
+   (relation `release`, shown on the Traceability page), and the event
+   `release_created {version, sha, story_ids, artifact_id, sprint_id}`.
+
+The notes have these sections, in order: title and date, `Completed stories`, `Fixed bugs`,
+`Known issues`, `Carried over`, `Process used` (the four levers), `Metrics` (velocity, commitment
+reliability, first-pass yield, test pass rate) and `Commits` (subjects since the previous version's
+tag, or all of them for `v0.1.0`).
+
+- **Idempotent:** a release whose `Release <version>` artifact exists logs `release_exists` and
+  changes nothing. With no sprint the step logs `release_skipped`.
+- The agent logs `agent_started` / `agent_finished` itself (`llm_mode` is `none`, zero usage) so
+  it shows in the activity feed without counting as an LLM call.
+
 ## Agents that run in several phases
 The Scrum Master runs in sprint planning, review and retro, and each needs a different prompt and
 output schema. `ScrumMasterAgent` (`workbench/agents/scrum_master.py`) is the one registered agent;
@@ -153,9 +251,41 @@ it reads `task["phase"]` and delegates to a handler per phase (`SprintPlanner`, 
 - **Capacity is enforced in code.** `_select_stories` drops unknown ids and anything over capacity,
   because the LLM only proposes the sprint.
 - **Retro feeds the next sprint.** `SprintPlanner.build_prompt` adds the previous sprint's retro
-  actions to the prompt.
+  actions to the prompt, and the retro's typed process changes shape the plan (next section).
 - **Burndown** comes from `burndown_snapshot` events written at each stand-up. Read it with
   `repo.burndown(db, sprint)`.
+
+## Retrospective and process levers
+The retrospective changes how the next sprint runs, not only what is written in the prompt.
+`RetroAgent` returns `RetroOutput` with the usual lists plus `process_changes` (`ProcessChanges`,
+`workbench/schemas.py`). Code clamps the values (`workbench/process.py`); the LLM only proposes.
+
+| Lever | Bounds | Default | Effect |
+|---|---|---|---|
+| `capacity` | 3 to 40 points | `DEFAULT_CAPACITY` (10) | Points the next sprint may commit to (planning) |
+| `max_fix_retries` | 1 to 5 | `DEFAULT_MAX_FIX_RETRIES` (3) | Developer attempts per bug before QA leaves it open |
+| `test_first` | on / off | off | QA writes the acceptance tests before the Developer codes the story |
+| `guidelines` | 5 kept, 200 characters each | none | Working agreements added to every agent's prompt |
+
+- `ProcessConfig` holds the levers. `apply(changes)` returns the new config and a diff such as
+  `{"capacity": [10, 7], "test_first": [false, true]}` (only changed levers).
+- `suggest_process_changes(metrics, config)` is a rule-based advisor. The mock retro returns its
+  result, and the live retro prompt shows it as a suggestion. Rules: completed < committed lowers
+  the capacity to the completed points (floor 3); bugs or a first-pass yield below 100% switch
+  test-first on and add a working agreement; a bug that hit the retry limit raises the limit by 1.
+- The retro saves `Sprint.retro = {went_well, went_wrong, actions, process_changes, metrics}`.
+  `metrics` is the `sprint_metrics` dict at retro time. A sprint that already has a retro is not
+  reviewed again (event `retro_exists`).
+- **Carry-over.** Before saving, every story of the sprint that is not done goes back to the
+  backlog with `Tools.unplan_story` (event `story_carried_over {story_id, from_sprint_id}`). The
+  next planning lists it as "(carried over)" and keeps its tasks.
+- **Next sprint.** `process.next_process(db, project_id)` returns (config, diff, reason): the
+  latest sprint's process plus the retro's changes. `SprintPlanner` plans with its capacity unless
+  the task carries an explicit `capacity`, and logs
+  `sprint_planned {sprint_id, number, story_ids, committed_points, capacity, process,
+  process_changes, process_reason}`. When the diff is not empty it also logs
+  `process_changed {sprint_id, diff, reason}`. `process` is the process actually used, so the
+  metrics and the PDCA view can show it later.
 
 ## Architect
 `ArchitectAgent` (`workbench/agents/architect.py`) runs in two phases and delegates by

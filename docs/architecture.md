@@ -24,7 +24,7 @@ flowchart LR
 | Orchestrator | `workbench/orchestrator/engine.py` | Phase order, approval gates, deciding which agents run |
 | Agents | `workbench/agents/` | One class per Scrum role; turn project state into LLM prompts and apply results |
 | Tools API | `workbench/agents/tools.py` | The only way agents change state; every call writes an Event |
-| LLM client | `workbench/llm/client.py` | Calls Claude, validates JSON against a schema, retries, caches, mock mode |
+| LLM client | `workbench/llm/client.py` | Calls Claude, validates JSON against a schema, retries, caches; mock, record and replay modes |
 | Data layer | `workbench/db/` | SQLAlchemy models, sessions, query helpers |
 | Contracts | `workbench/schemas.py` | Pydantic models for agent outputs |
 
@@ -44,9 +44,15 @@ stateDiagram-v2
   execution --> review
   review --> retro: human approves
   retro --> release
+  release --> sprint_planning: stories left and fewer than MAX_SPRINTS sprints
   release --> done
   done --> [*]
 ```
+
+The loop edge is `Orchestrator.next_phase`: after `release` it returns to `sprint_planning` while
+`more_sprints` holds (a story that fits the next capacity is unplanned and fewer than
+`MAX_SPRINTS` sprints ran). `run_to_end` stops with an error after 200 steps. `ProjectView.
+has_more_sprints` tells the UI which button label to show at the release.
 
 `PHASE_AGENTS` in `engine.py` maps each phase to the agent roles that run in it:
 
@@ -60,6 +66,51 @@ stateDiagram-v2
 | release | devops |
 
 Roles without a registered agent fall back to `StubAgent`, which logs and does nothing.
+
+The release phase runs `ReleaseAgent`, which wraps the DevOps agent and ends every sprint with
+a versioned release: notes in `releases/v0.N.0.md`, a git tag in the sandbox repository, a
+`release` artifact traced to the completed stories and a `release_created` event (docs/agents.md,
+"Release step"). Artifacts of kind `release` therefore include the DevOps files and one
+`Release vX.Y.Z` notes artifact per sprint.
+
+## Process improvement loop
+Each sprint is one Plan-Do-Check-Act cycle. The retrospective turns measured results into typed
+process changes (`ProcessChanges`), and the next sprint is planned with them. Nothing is stored in
+new tables: the process used is in the `sprint_planned` event, the proposal is in `Sprint.retro`.
+
+```mermaid
+flowchart LR
+  Plan["Plan<br/>sprint planning with ProcessConfig<br/>(sprint_planned.process)"] --> Do["Do<br/>execution: developer, QA"]
+  Do --> Check["Check<br/>review + sprint_metrics"]
+  Check --> Act["Act<br/>retro: process_changes,<br/>unfinished stories to backlog"]
+  Act -->|"next_process()"| Plan
+```
+
+The same loop is the Quality Improvement Paradigm (QIP) from the course:
+
+| QIP step | In the workbench |
+|---|---|
+| Characterize | Backlog, design and the metrics of earlier sprints (`metrics.py`) |
+| Set goals | GQM goals G1 to G4 (`docs/metrics.md`) |
+| Choose process | `ProcessConfig` (capacity, fix retries, test-first, working agreements) |
+| Execute | The sprint: planning, execution, review |
+| Analyze | Review and `sprint_metrics`, then the retrospective |
+| Package | The retro's changes stored in `Sprint.retro` and recorded in the next `sprint_planned.process` |
+
+The Metrics page shows the cycle for every sprint (`GET /projects/{id}/improvement`): Plan is the
+process in `sprint_planned`, Do is committed vs completed points, Check the metrics with their
+change since the previous sprint, Act the retro's proposal.
+
+Unfinished stories return to the backlog at the retro (`story_carried_over`) and are planned first.
+The levers and their bounds are in docs/agents.md. Agents read the sprint's process from the
+database, so no lever needs the orchestrator:
+
+| Lever | Read by | Effect |
+|---|---|---|
+| `capacity` | Scrum Master planning | Points the sprint may commit to |
+| `max_fix_retries` | Developer, QA | Fix attempts per bug; QA's test/fix loop length |
+| `test_first` | Developer, QA | QA writes the tests before the Developer codes; QA also runs stories whose tests never ran |
+| `guidelines` | `BaseAgent.run` (all agents but the Product Owner) | Working agreements appended to the prompt |
 
 ## Data model
 ```mermaid

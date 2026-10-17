@@ -4,8 +4,14 @@ __pycache__/
 .env
 *.db
 .pytest_cache/
+.coverage
+htmlcov/
 .ruff_cache/
 workspaces/
 node_modules/
 dist/
 *.tsbuildinfo
+demo_runs/
+demo/video/
+test-results/
+playwright-report/

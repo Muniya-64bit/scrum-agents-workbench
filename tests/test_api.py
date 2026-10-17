@@ -20,14 +20,14 @@ def test_health():
     assert client.get("/health").json() == {"status": "ok"}
 
 
-def test_run_flow():
-    with TestClient(app) as c:
-        pid = c.post("/projects", json={"name": "n", "idea": "i"}).json()["id"]
-        assert c.post(f"/projects/{pid}/advance").json()["phase"] == "backlog"
-        c.post(f"/projects/{pid}/advance")
-        assert c.post(f"/projects/{pid}/advance").status_code == 409
-        c.post(f"/projects/{pid}/approve")
-        assert c.get(f"/projects/{pid}/events").json()
+def test_run_flow(api):
+    c, _ = api  # private in-memory DB: the app's own ./workbench.db is never touched
+    pid = c.post("/projects", json={"name": "n", "idea": "i"}).json()["id"]
+    assert c.post(f"/projects/{pid}/advance").json()["phase"] == "backlog"
+    c.post(f"/projects/{pid}/advance")
+    assert c.post(f"/projects/{pid}/advance").status_code == 409
+    c.post(f"/projects/{pid}/approve")
+    assert c.get(f"/projects/{pid}/events").json()
 
 
 @pytest.fixture
@@ -88,6 +88,22 @@ def test_backlog_nests_stories_in_priority_order(api):
     assert [s["title"] for s in stories] == ["Add todo", "Delete todo"]
     assert stories[0]["acceptance_criteria"] == ["Given x When y Then z"]
     assert stories[0]["sprint_id"] == ids["sprint"]
+
+
+def test_a_story_with_all_tasks_done_is_reported_as_done(api):
+    """Issue #40: no code sets story.status to done, so the API derives it from the tasks."""
+    c, factory = api
+    ids = _seed(factory)
+    pid = ids["project"]
+    statuses = lambda: {s["title"]: s["status"]  # noqa: E731
+                        for s in c.get(f"/projects/{pid}/backlog").json()["epics"][0]["stories"]}
+    assert statuses() == {"Add todo": "backlog", "Delete todo": "backlog"}
+    c.patch(f"/tasks/{ids['task']}", json={"status": "done"})
+    assert statuses() == {"Add todo": "done", "Delete todo": "backlog"}
+    rows = {r["title"]: r["status"] for r in c.get(f"/projects/{pid}/traceability").json()}
+    assert rows == {"Add todo": "done", "Delete todo": "backlog"}
+    sprint = c.get(f"/sprints/{ids['sprint']}").json()
+    assert [s["status"] for s in sprint["stories"]] == ["done"]
 
 
 def test_sprints_list_and_detail(api):

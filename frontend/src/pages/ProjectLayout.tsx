@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useOutletContext, useParams } from "react-router-dom";
 
 import { ApiError, api } from "../api/client";
-import type { ActivityEvent, Project } from "../api/types";
+import type { ActivityEvent, ProcessInfo, Project } from "../api/types";
 import { Avatar } from "../components/Avatar";
 import { PhaseBar } from "../components/PhaseBar";
 import { useToast } from "../components/Toast";
@@ -21,6 +21,8 @@ export interface ProjectContext {
   /** The project's activity, oldest first, kept up to date from the live stream. */
   events: ActivityEvent[];
   streamStatus: StreamStatus;
+  /** The sprint's process levers and the next sprint's; null until loaded or without sprints. */
+  process: ProcessInfo | null;
   /** Replace the project after an action (approve, advance) and reload the pages. */
   onProjectChange: (p: Project) => void;
 }
@@ -35,6 +37,7 @@ export function ProjectLayout() {
   const res = useResource(() => api.getProject(projectId), [projectId]);
   const [version, setVersion] = useState(0);
   const { setData } = res;
+  const processRes = useResource(() => api.process(projectId), [projectId, version]);
 
   // Agents and other viewers change data while you look at it: reload pages shortly after
   // a burst of events, and the project header at once when the phase or gate changes.
@@ -94,11 +97,22 @@ export function ProjectLayout() {
           </div>
           <PhaseActions project={project} onChange={onChange} latest={latest} />
         </div>
-        <PhaseBar phase={project.phase} awaitingApproval={project.awaiting_approval} />
+        <PhaseBar
+          phase={project.phase}
+          awaitingApproval={project.awaiting_approval}
+          sprintNumber={processRes.data?.current_sprint_number ?? null}
+        />
       </header>
       <Outlet
         context={
-          { project, version, events, streamStatus: status, onProjectChange: onChange } satisfies ProjectContext
+          {
+            project,
+            version,
+            events,
+            streamStatus: status,
+            process: processRes.data ?? null,
+            onProjectChange: onChange,
+          } satisfies ProjectContext
         }
       />
     </>
@@ -168,7 +182,7 @@ function PhaseActions({
     );
   }
 
-  const next = nextPhase(project.phase);
+  const next = nextPhase(project.phase, project.has_more_sprints);
   return (
     <div className="phase-actions">
       {busy === "advance" && latest && (
@@ -189,7 +203,9 @@ function PhaseActions({
           ? "Agents working…"
           : next === "done" || !next
             ? "Finish project"
-            : `Start ${phaseLabel(next)}`}
+            : project.phase === "release"
+              ? "Start Sprint planning"
+              : `Start ${phaseLabel(next)}`}
       </Button>
     </div>
   );

@@ -1,0 +1,36 @@
+{
+  "key": "scrum_master.RetroAgent.retro.s1",
+  "n": 1,
+  "output": {
+    "actions": [
+      "QA writes the acceptance tests before the Developer codes",
+      "Commit to the velocity we measured (7 points)",
+      "Allow two fix attempts per bug"
+    ],
+    "process_changes": {
+      "add_guidelines": [
+        "Write the acceptance tests first and make them pass before committing"
+      ],
+      "capacity": 7,
+      "max_fix_retries": 2,
+      "reason": "Commit to last sprint's velocity (7 of 10 points); defects escaped into testing, so write the tests first; a bug stayed open after one attempt, so allow two",
+      "test_first": true
+    },
+    "summary": "Sprint 1 delivered 7 of 10 points; the process changes for sprint 2",
+    "went_well": [
+      "QA caught the missing empty-title check before the review",
+      "Create, list and complete work and are covered by tests"
+    ],
+    "went_wrong": [
+      "Delete item was left open after the one allowed fix attempt",
+      "Defects were found only after the code was written",
+      "We committed 10 points and finished 7"
+    ]
+  },
+  "schema": "RetroOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

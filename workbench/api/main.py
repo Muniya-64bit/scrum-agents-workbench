@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from workbench import metrics, process
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
 from workbench.api.sse import event_stream, event_view
@@ -13,9 +14,14 @@ from workbench.api.views import (
     ArtifactView,
     BacklogView,
     BugView,
+    BurndownView,
     EpicView,
     EventView,
+    ImprovementRow,
+    ProcessView,
+    ProjectMetricsView,
     ProjectView,
+    ReleaseView,
     SprintDetailView,
     SprintView,
     StoryView,
@@ -66,8 +72,11 @@ def _get_or_404(db: Session, model, id_: int, name: str):
     return obj
 
 
-def _view(p: m.Project) -> ProjectView:
-    return ProjectView.model_validate(p)
+def _view(db: Session, p: m.Project) -> ProjectView:
+    view = ProjectView.model_validate(p)
+    if p.phase == "release":
+        view.has_more_sprints = Orchestrator(db).more_sprints(p.id)
+    return view
 
 
 def _sprint_view(s: m.Sprint) -> SprintView:
@@ -77,32 +86,43 @@ def _sprint_view(s: m.Sprint) -> SprintView:
                       points=sum(st.points for st in s.stories))
 
 
+def _story_status(s: m.UserStory) -> str:
+    """The stored status, except that a story whose tasks are all done is reported as done."""
+    return "done" if repo.story_is_done(s) else s.status
+
+
+def _story_view(s: m.UserStory) -> StoryView:
+    view = StoryView.model_validate(s)
+    view.status = _story_status(s)
+    return view
+
+
 def _by_priority(stories) -> list[StoryView]:
-    return [StoryView.model_validate(s) for s in sorted(stories, key=lambda s: (s.priority, s.id))]
+    return [_story_view(s) for s in sorted(stories, key=lambda s: (s.priority, s.id))]
 
 
 # --- Projects and orchestration ---------------------------------------------------------------
 
 @app.get("/projects", response_model=list[ProjectView])
 def list_projects(db: Session = Depends(get_session)):
-    return [_view(p) for p in repo.list_projects(db)]
+    return [_view(db, p) for p in repo.list_projects(db)]
 
 
 @app.post("/projects", response_model=ProjectView)
 def create_project(body: ProjectIn, db: Session = Depends(get_session)):
-    return _view(repo.create_project(db, body.name, body.idea))
+    return _view(db, repo.create_project(db, body.name, body.idea))
 
 
 @app.get("/projects/{project_id}", response_model=ProjectView)
 def get_project(project_id: int, db: Session = Depends(get_session)):
-    return _view(_proj(db, project_id))
+    return _view(db, _proj(db, project_id))
 
 
 @app.post("/projects/{project_id}/advance", response_model=ProjectView)
 def advance(project_id: int, db: Session = Depends(get_session)):
     _proj(db, project_id)
     try:
-        return _view(Orchestrator(db, AGENTS).step(project_id))
+        return _view(db, Orchestrator(db, AGENTS).step(project_id))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
@@ -113,7 +133,7 @@ def approve(project_id: int, approved: bool = True, comment: str = "",
     """Clear the pending gate. `comment` (e.g. a reason for rejecting) is logged on the event."""
     _proj(db, project_id)
     try:
-        return _view(Orchestrator(db, AGENTS).approve(project_id, approved, comment))
+        return _view(db, Orchestrator(db, AGENTS).approve(project_id, approved, comment))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
@@ -184,20 +204,73 @@ def list_bugs(project_id: int, status: str | None = None, db: Session = Depends(
 def traceability(project_id: int, db: Session = Depends(get_session)):
     """Story -> design -> code -> test, one row per backlog story in priority order."""
     _proj(db, project_id)
-    rows = {s.id: TraceRow(story_id=s.id, title=s.title, status=s.status)
+    details = metrics.trace_details(db, project_id)
+    rows = {s.id: TraceRow(story_id=s.id, title=s.title, status=_story_status(s),
+                           **details[s.id])
             for s in repo.backlog(db, project_id)}
     for link, a in repo.trace_links(db, project_id):
         row = rows.get(link.story_id)
         if row is None:
             continue
-        item = TraceItem(artifact_id=a.id, name=a.name, kind=a.kind, path=a.path)
+        item = TraceItem(artifact_id=a.id, name=a.name, kind=a.kind, path=a.path, version=a.version)
         if a.kind in DESIGN_KINDS:
             row.design.append(item)
-        elif a.kind in ("code", "test"):
+        elif a.kind in ("code", "test", "release"):
             getattr(row, a.kind).append(item)
         else:
             row.other.append(item)
     return list(rows.values())
+
+
+@app.get("/projects/{project_id}/releases", response_model=list[ReleaseView])
+def releases(project_id: int, db: Session = Depends(get_session)):
+    """One entry per sprint release, oldest first."""
+    _proj(db, project_id)
+    out = []
+    for e in repo.events_since(db, project_id):
+        if e.kind != "release_created":
+            continue
+        p = e.payload
+        art = repo.get(db, m.Artifact, p.get("artifact_id"))
+        sprint = repo.get(db, m.Sprint, p.get("sprint_id"))
+        out.append(ReleaseView(
+            artifact_id=p["artifact_id"], version=p["version"], sprint_id=p["sprint_id"],
+            sprint_number=sprint.number if sprint else None,
+            created_at=art.created_at if art else e.created_at,
+            story_ids=p.get("story_ids") or [], sha=p.get("sha") or ""))
+    return out
+
+
+@app.get("/projects/{project_id}/process", response_model=ProcessView)
+def process_view(project_id: int, db: Session = Depends(get_session)):
+    """The process in force now, and the one the next sprint will use (retro changes applied)."""
+    _proj(db, project_id)
+    sprint = repo.current_sprint(db, project_id)
+    nxt, diff, reason = process.next_process(db, project_id)
+    return ProcessView(current=process.current_process(db, project_id).model_dump(),
+                       current_sprint_number=sprint.number if sprint else None,
+                       next=nxt.model_dump(), next_changes=diff, next_reason=reason)
+
+
+# --- Metrics ----------------------------------------------------------------------------------
+
+@app.get("/sprints/{sprint_id}/burndown", response_model=BurndownView)
+def sprint_burndown(sprint_id: int, db: Session = Depends(get_session)):
+    sprint = _get_or_404(db, m.Sprint, sprint_id, "sprint")
+    return BurndownView.model_validate(metrics.burndown(db, sprint))
+
+
+@app.get("/projects/{project_id}/improvement", response_model=list[ImprovementRow])
+def improvement(project_id: int, db: Session = Depends(get_session)):
+    """One Plan-Do-Check-Act row per sprint, to show how the process improves."""
+    _proj(db, project_id)
+    return [ImprovementRow.model_validate(r) for r in metrics.improvement_rows(db, project_id)]
+
+
+@app.get("/projects/{project_id}/metrics", response_model=ProjectMetricsView)
+def project_metrics(project_id: int, db: Session = Depends(get_session)):
+    _proj(db, project_id)
+    return ProjectMetricsView.model_validate(metrics.project_metrics(db, project_id))
 
 
 # --- Activity feed ----------------------------------------------------------------------------

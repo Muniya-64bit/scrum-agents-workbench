@@ -1,0 +1,29 @@
+{
+  "key": "scrum_master.SprintPlanner.sprint_planning.s2",
+  "n": 1,
+  "output": {
+    "goal": "Let users focus on open or completed items",
+    "story_ids": [
+      6
+    ],
+    "summary": "Planned the last story (3 points)",
+    "tasks": [
+      {
+        "assignee": "developer",
+        "story_id": 6,
+        "title": "Implement: Filter by status"
+      },
+      {
+        "assignee": "qa",
+        "story_id": 6,
+        "title": "Test: Filter by status"
+      }
+    ]
+  },
+  "schema": "SprintPlanOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

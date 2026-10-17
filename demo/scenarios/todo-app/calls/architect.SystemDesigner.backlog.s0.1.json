@@ -1,0 +1,29 @@
+{
+  "key": "architect.SystemDesigner.backlog.s0",
+  "n": 1,
+  "output": {
+    "api_spec": "openapi: 3.0.3\ninfo:\n  title: Todo app API\n  version: 0.1.0\npaths:\n  /items:\n    get:\n      summary: List items, optionally filtered by status\n      parameters:\n        - name: status\n          in: query\n          required: false\n          schema: { type: string, enum: [open, done] }\n      responses:\n        '200': { description: The items in creation order }\n        '422': { description: Unknown status }\n    post:\n      summary: Create an item\n      requestBody:\n        content:\n          application/json:\n            schema: { $ref: '#/components/schemas/NewItem' }\n      responses:\n        '201': { description: The new item }\n        '422': { description: Empty title }\n  /items/{item_id}:\n    patch:\n      summary: Change the title of an item\n      responses:\n        '200': { description: The updated item }\n        '404': { description: Unknown item }\n        '422': { description: Empty title }\n    delete:\n      summary: Delete an item\n      responses:\n        '200': { description: The id of the deleted item }\n        '404': { description: Unknown item }\n  /items/{item_id}/complete:\n    post:\n      summary: Mark an item as done\n      responses:\n        '200': { description: The completed item }\n        '404': { description: Unknown item }\ncomponents:\n  schemas:\n    NewItem:\n      type: object\n      required: [title]\n      properties:\n        title: { type: string, minLength: 1 }\n",
+    "diagrams": [
+      {
+        "mermaid": "flowchart LR\n  Client[HTTP client] -->|JSON| API[FastAPI app]\n  API --> Store[(items dict)]\n  Tests[pytest + TestClient] --> API",
+        "name": "components"
+      },
+      {
+        "mermaid": "erDiagram\n  ITEM {\n    int id\n    string title\n    bool done\n  }",
+        "name": "data-model"
+      },
+      {
+        "mermaid": "sequenceDiagram\n  actor U as User\n  U->>API: POST /items {title}\n  API->>API: validate title\n  API->>Store: add item\n  API-->>U: 201 item",
+        "name": "main-flow"
+      }
+    ],
+    "overview": "# Architecture: Todo app\n\n## Tech stack\n- Python 3.12 and FastAPI: a small JSON API with automatic OpenAPI docs.\n- State kept in memory (a dict of items): enough for a demo, no database to set up.\n- pytest with FastAPI's TestClient for the acceptance tests.\n\n## Components\n- `app/main.py`: the FastAPI app, the item store and all routes.\n- `tests/`: one test file per story.\n\n## Key decisions\n- In-memory store: the goal is the process, not persistence; a database can replace it later.\n- One module for the API: five small routes do not need a package structure.\n- Errors are HTTP errors: 422 for invalid input, 404 for an unknown item id.\n",
+    "summary": "Designed a small FastAPI service with an in-memory item store"
+  },
+  "schema": "ArchitectureOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

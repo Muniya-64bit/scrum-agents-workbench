@@ -2,6 +2,7 @@ import { useState, type DragEvent } from "react";
 
 import { api } from "../api/client";
 import type { Sprint, SprintDetail, Story, Task, TaskStatus } from "../api/types";
+import { ProcessChips } from "../components/ProcessChips";
 import { useToast } from "../components/Toast";
 import { IconBoard } from "../components/icons";
 import { EmptyState, ErrorState, Loading, RoleTag, Spinner } from "../components/ui";
@@ -38,7 +39,7 @@ function byId(stories: Story[]): Map<number, Story> {
 }
 
 export function BoardPage() {
-  const { project, version } = useProject();
+  const { project, version, process } = useProject();
   const toast = useToast();
   const [sprintId, setSprintId] = useState<number | null>(null);
   const board = useResource(() => loadBoard(project.id, sprintId), [project.id, sprintId, version]);
@@ -73,6 +74,7 @@ export function BoardPage() {
 
   return (
     <div className="page-body">
+      <ProcessChips info={process} phase={project.phase} />
       <section className="board-summary" aria-label="Sprint summary">
         <div className="board-summary-main">
           {sprints.length > 1 ? (

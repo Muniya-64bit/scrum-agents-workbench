@@ -6,9 +6,12 @@ For each sprint story that has code:
   2. the tests run in the workspace (workbench.runner) and the result is parsed
   3. failures become Bug records (one per failing test, no duplicates); a bug the Developer
      called fixed that still fails is reopened
-  4. while bugs are open and the Developer has attempts left (MAX_FIX_RETRIES, tracked in
-     `Bug.retries`), the Developer reruns the story and QA tests again. After that the bug stays
-     open for a human.
+  4. while bugs are open and the Developer has attempts left (the sprint's `max_fix_retries`,
+     MAX_FIX_RETRIES by default, tracked in `Bug.retries`), the Developer reruns the story and QA
+     tests again. After that the bug stays open for a human.
+
+With the `test_first` lever the Developer calls `write_tests` before it codes: QA writes the tests
+from the acceptance criteria and the planned design, and runs them once the code exists.
 
 QA tasks move to `testing` while tests fail and to `done` once they pass."""
 
@@ -19,15 +22,16 @@ from sqlalchemy.orm import Session
 
 from workbench import runner
 from workbench.agents.base import BaseAgent
-from workbench.agents.developer import MAX_FIX_RETRIES
 from workbench.agents.tools import Tools
 from workbench.db import models as m
 from workbench.db import repo
 from workbench.llm.client import LLMClient
+from workbench.process import fix_retry_limit
 from workbench.schemas import CodeOutput
 from workbench.workspace import UnsafePath, Workspace
 
 FILES_CHARS = 12000  # budget for code shown to the LLM
+DESIGN_CHARS = 4000  # per design / API artifact shown when writing tests before the code
 MAX_BUGS_PER_RUN = 5  # one bug per failing test, capped so a broken app does not flood the board
 PYTEST_INI = "[pytest]\ntestpaths = tests\npythonpath = .\n"  # keeps pytest off the parent config
 GITIGNORE = "__pycache__/\n*.pyc\n.pytest_cache/\n"
@@ -60,8 +64,29 @@ def _bugs(db: Session, story_id: int) -> list[m.Bug]:
     return list(db.query(m.Bug).filter_by(story_id=story_id).order_by(m.Bug.id))
 
 
-def _fixable(bugs: list[m.Bug]) -> list[m.Bug]:
-    return [b for b in bugs if b.status == "open" and b.retries < MAX_FIX_RETRIES]
+def _fixable(bugs: list[m.Bug], max_retries: int) -> list[m.Bug]:
+    return [b for b in bugs if b.status == "open" and b.retries < max_retries]
+
+
+def _stories_with_runs(db: Session, project_id: int) -> set[int]:
+    return {e.payload.get("story_id") for e in repo.events_since(db, project_id)
+            if e.kind == "test_run"}
+
+
+def _changed_since_run(db: Session, project_id: int) -> set[int]:
+    """Stories whose code was committed after their last test run, for example a carried-over
+    bug that the Developer fixed before QA's turn."""
+    committed: dict[int, int] = {}
+    ran: dict[int, int] = {}
+    for e in repo.events_since(db, project_id):
+        story_id = e.payload.get("story_id")
+        if story_id is None:
+            continue
+        if e.kind == "code_committed":
+            committed[story_id] = e.id
+        elif e.kind == "test_run":
+            ran[story_id] = e.id
+    return {sid for sid, event_id in committed.items() if event_id > ran.get(sid, 0)}
 
 
 class QAAgent(BaseAgent):
@@ -75,35 +100,59 @@ class QAAgent(BaseAgent):
         self.workspaces_dir = workspaces_dir  # None: use config.WORKSPACES_DIR at run time
         self.developer = developer  # reran for bug fixes; None means QA only reports bugs
         self.timeout = timeout
+        if developer is not None and hasattr(developer, "test_writer"):
+            developer.test_writer = self.write_tests  # the test-first lever
 
     def workspace(self, project_id: int) -> Workspace:
         return Workspace(project_id, self.workspaces_dir)
 
     # --- choosing what to test --------------------------------------------------------------
 
-    def stories_to_test(self, db: Session, project_id: int, task: dict) -> list[m.UserStory]:
+    def stories_to_test(self, db: Session, project_id: int, task: dict,
+                        max_retries: int | None = None) -> list[m.UserStory]:
         """`task["story_id"]` forces one story. Otherwise: sprint stories that have code and
-        either no tests yet or open bugs."""
+        either no tests yet, tests that never ran (written first), code changed since the last
+        run or open bugs."""
         if task.get("story_id"):
             s = repo.get(db, m.UserStory, task["story_id"])
             return [s] if s and s.epic.project_id == project_id else []
+        if max_retries is None:
+            max_retries = fix_retry_limit(db, project_id, task)
+        ran = _stories_with_runs(db, project_id)
+        changed = _changed_since_run(db, project_id)
         return [s for s in repo.backlog(db, project_id)
                 if s.sprint_id is not None and _has_code(db, project_id, s.id)
-                and (not _tests_for(db, project_id, s.id) or _fixable(_bugs(db, s.id)))]
+                and (not _tests_for(db, project_id, s.id) or s.id not in ran
+                     or s.id in changed or _fixable(_bugs(db, s.id), max_retries))]
 
     def run(self, db: Session, project_id: int, task: dict | None = None) -> BaseModel:
         task = task or {}
         tools = Tools(db, project_id, self.role)
-        stories = self.stories_to_test(db, project_id, task)
+        max_retries = fix_retry_limit(db, project_id, task)  # resolved once per run
+        stories = self.stories_to_test(db, project_id, task, max_retries)
         if not stories:  # nothing to test: no LLM call
             tools.log("tests_skipped", "No stories with code need testing")
             return CodeOutput(summary="No stories need testing")
-        passing = sum(self._test_story(db, tools, s, task) for s in stories)
+        passing = sum(self._test_story(db, tools, s, task, max_retries) for s in stories)
         return CodeOutput(summary=f"Tested {len(stories)} stories, {passing} passing")
 
     # --- one story ----------------------------------------------------------------------------
 
-    def _test_story(self, db: Session, tools: Tools, story: m.UserStory, task: dict) -> bool:
+    def write_tests(self, db: Session, project_id: int, task: dict) -> None:
+        """Test-first: write the story's tests before its code exists. The Developer calls this
+        when the `test_first` lever is on. The tests run later, in `run`."""
+        story_id = task["story_id"]
+        if _tests_for(db, project_id, story_id):
+            return
+        BaseAgent.run(self, db, project_id, {**task, "name": "tests first", "story_id": story_id,
+                                             "test_first": True})
+        if _tests_for(db, project_id, story_id):
+            Tools(db, project_id, self.role).log(
+                "tests_written_first", f"Tests for story #{story_id} written before the code",
+                story_id=story_id)
+
+    def _test_story(self, db: Session, tools: Tools, story: m.UserStory, task: dict,
+                    max_retries: int) -> bool:
         project_id = tools.project_id
         if not _has_code(db, project_id, story.id):
             tools.log("tests_skipped", f"Story #{story.id} has no code yet", story_id=story.id)
@@ -114,16 +163,17 @@ class QAAgent(BaseAgent):
         if not targets:
             tools.log("tests_missing", f"No valid tests for story #{story.id}", story_id=story.id)
             return False
-        for attempt in range(MAX_FIX_RETRIES + 1):
+        for attempt in range(max_retries + 1):
             result = runner.run_pytest(self.workspace(project_id).path, targets, self.timeout)
             self._record(tools, story, result)
             if result.ok:
                 return True
-            if self.developer is None or not _fixable(_bugs(db, story.id)):
+            if self.developer is None or not _fixable(_bugs(db, story.id), max_retries):
                 break
-            if attempt < MAX_FIX_RETRIES:
+            if attempt < max_retries:
                 self.developer.run(db, project_id, {"name": "bug fix", "phase": "execution",
-                                                    "story_id": story.id})
+                                                    "story_id": story.id,
+                                                    "max_fix_retries": max_retries})
         if _bugs(db, story.id):
             tools.log("bugs_left_open", f"Story #{story.id} still fails after the fix attempts",
                       story_id=story.id)
@@ -162,7 +212,11 @@ class QAAgent(BaseAgent):
                  f"As a {story.as_a}, I want {story.i_want}, so that {story.so_that}",
                  "Acceptance criteria:"]
         lines += [f"- {c}" for c in story.acceptance_criteria] or ["- (none given)"]
-        lines += ["", f"Write the tests in tests/test_story_{story.id}.py.", "", "Code to test:"]
+        lines += ["", f"Write the tests in tests/test_story_{story.id}.py.", ""]
+        if task.get("test_first"):
+            lines += self._planned_api(db, project_id, story)
+            return "\n".join(lines)
+        lines.append("Code to test:")
         ws, used = self.workspace(project_id), 0
         for path in ws.files():
             if path.startswith("tests/") or not path.endswith((".py", ".txt")):
@@ -174,6 +228,19 @@ class QAAgent(BaseAgent):
             used += len(content)
             lines += [f"=== {path} ===", content]
         return "\n".join(lines)
+
+    def _planned_api(self, db: Session, project_id: int, story: m.UserStory) -> list[str]:
+        """Prompt lines for tests written before the code: the story's design and API spec."""
+        lines = ["There is no implementation yet. Write the tests from the acceptance criteria "
+                 "against this planned API:",
+                 "Use `from fastapi.testclient import TestClient` and `from app.main import app`."]
+        for link, a in repo.trace_links(db, project_id):
+            if link.story_id == story.id and link.relation in ("design", "api_spec"):
+                lines += [f"=== {a.name} ===", a.content[:DESIGN_CHARS]]
+        specs = repo.artifacts(db, project_id, "api_spec")
+        if specs:
+            lines += [f"=== {specs[-1].name} ===", specs[-1].content[:DESIGN_CHARS]]
+        return lines
 
     def mock_output(self, db: Session, project_id: int, task: dict) -> dict:
         story = repo.get(db, m.UserStory, task["story_id"])

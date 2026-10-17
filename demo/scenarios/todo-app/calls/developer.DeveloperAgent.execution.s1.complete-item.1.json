@@ -1,0 +1,19 @@
+{
+  "key": "developer.DeveloperAgent.execution.s1.complete-item",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "\"\"\"Todo API: an in-memory list of to-do items.\"\"\"\n\nimport itertools\n\nfrom fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\n\napp = FastAPI(title=\"Todo app\")\nitems: dict[int, dict] = {}\n_ids = itertools.count(1)\n\n\nclass NewItem(BaseModel):\n    title: str\n\n\n@app.post(\"/items\", status_code=201)\ndef create_item(body: NewItem) -> dict:\n    item = {\"id\": next(_ids), \"title\": body.title, \"done\": False}\n    items[item[\"id\"]] = item\n    return item\n\n\n@app.get(\"/items\")\ndef list_items() -> list[dict]:\n    return list(items.values())\n\n\n@app.post(\"/items/{item_id}/complete\")\ndef complete_item(item_id: int) -> dict:\n    item = items.get(item_id)\n    if item is None:\n        raise HTTPException(404, \"item not found\")\n    item[\"done\"] = True\n    return item\n",
+        "path": "app/main.py"
+      }
+    ],
+    "summary": "Added POST /items/{id}/complete"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

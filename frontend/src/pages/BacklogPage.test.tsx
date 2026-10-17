@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { backlog, project } from "../test/fixtures";
+import { backlog, processInfo, project, story } from "../test/fixtures";
 import { mockApi, renderApp } from "../test/utils";
 
 describe("BacklogPage", () => {
@@ -18,6 +18,35 @@ describe("BacklogPage", () => {
     await user.click(screen.getByText("Create an item"));
     expect(screen.getByText(/to add a to-do/)).toBeVisible();
     expect(screen.getByText("Given")).toHaveClass("gherkin");
+  });
+
+  it("marks a finished story as Done and a planned one as In sprint", async () => {
+    const finished = { ...story, id: 11, title: "Delete an item", status: "done", sprint_id: 5 };
+    const planned = { ...story, id: 12, title: "Edit an item", status: "sprint", sprint_id: 5 };
+    mockApi({
+      "GET /projects/1": project,
+      "GET /projects/1/backlog": {
+        ...backlog,
+        epics: [{ id: 1, title: "Task management", description: "", stories: [finished, planned] }],
+      },
+    });
+    renderApp("/projects/1/backlog");
+    const done = (await screen.findByText("Delete an item")).closest("summary")!;
+    expect(done).toHaveTextContent("Done");
+    expect(done).not.toHaveTextContent("In sprint");
+    expect(screen.getByText("Edit an item").closest("summary")).toHaveTextContent("In sprint");
+  });
+
+  it("shows the process levers of the current sprint", async () => {
+    mockApi({
+      "GET /projects/1": project,
+      "GET /projects/1/backlog": backlog,
+      "GET /projects/1/process": processInfo,
+    });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByText("Capacity 10")).toBeInTheDocument();
+    expect(screen.getByText("Fix retries 3")).toBeInTheDocument();
+    expect(screen.queryByText(/Next sprint/)).toBeNull(); // only at the retro and release
   });
 
   it("tells the user how to get a backlog when it is empty", async () => {

@@ -1,4 +1,5 @@
 import { ApiError, api } from "./client";
+import { artifact, burndown, metrics, traceRows } from "../test/fixtures";
 import { mockApi } from "../test/utils";
 
 describe("api client", () => {
@@ -30,5 +31,24 @@ describe("api client", () => {
   it("explains when the backend is not running", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     await expect(api.listProjects()).rejects.toThrow(/Cannot reach the API/);
+  });
+
+  it("reads metrics, burndown, traceability and artifacts", async () => {
+    const calls = mockApi({
+      "GET /projects/1/metrics": metrics,
+      "GET /sprints/6/burndown": burndown,
+      "GET /projects/1/traceability": traceRows,
+      "GET /artifacts/2": artifact,
+    });
+    await expect(api.metrics(1)).resolves.toEqual(metrics);
+    await expect(api.burndown(6)).resolves.toEqual(burndown);
+    await expect(api.traceability(1)).resolves.toEqual(traceRows);
+    await expect(api.artifact(2)).resolves.toEqual(artifact);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      "GET /projects/1/metrics",
+      "GET /sprints/6/burndown",
+      "GET /projects/1/traceability",
+      "GET /artifacts/2",
+    ]);
   });
 });

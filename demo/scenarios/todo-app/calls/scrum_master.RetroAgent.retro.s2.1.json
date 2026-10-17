@@ -1,0 +1,27 @@
+{
+  "key": "scrum_master.RetroAgent.retro.s2",
+  "n": 1,
+  "output": {
+    "actions": [
+      "Keep test-first and the two-attempt limit"
+    ],
+    "process_changes": {
+      "reason": "The process worked; keep it"
+    },
+    "summary": "Sprint 2 delivered everything it committed",
+    "went_well": [
+      "Tests written first: every story passed on its first run",
+      "Committing 6 of 7 points was met in full",
+      "The carried-over bug was fixed with the extra attempt"
+    ],
+    "went_wrong": [
+      "Nothing measurable"
+    ]
+  },
+  "schema": "RetroOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

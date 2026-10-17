@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 import { api } from "../api/client";
 import type { Story } from "../api/types";
 import { IconList } from "../components/icons";
+import { ProcessChips } from "../components/ProcessChips";
 import { Badge, EmptyState, ErrorState, Loading, type Tone } from "../components/ui";
 import { useResource } from "../lib/useResource";
 import { useProject } from "./ProjectLayout";
 
 export function BacklogPage() {
-  const { project, version } = useProject();
+  const { project, version, process } = useProject();
   const backlog = useResource(() => api.backlog(project.id), [project.id, version]);
 
   if (backlog.error) return <ErrorState error={backlog.error} onRetry={backlog.reload} />;
@@ -31,6 +32,7 @@ export function BacklogPage() {
 
   return (
     <div className="page-body">
+      <ProcessChips info={process} phase={project.phase} />
       {vision && (
         <section className="vision" aria-label="Product vision">
           <span className="eyebrow">Product vision</span>
@@ -93,7 +95,11 @@ function StoryRow({ story }: { story: Story }) {
           <span className="story-title">{story.title}</span>
           <span className="story-meta">
             <Badge tone={PRIORITY_TONE[story.priority] ?? "neutral"}>P{story.priority}</Badge>
-            {story.sprint_id !== null && <Badge tone="doing">In sprint</Badge>}
+            {story.status === "done" ? (
+              <Badge tone="done">Done</Badge>
+            ) : (
+              story.sprint_id !== null && <Badge tone="doing">In sprint</Badge>
+            )}
             <span className="points" title="Story points">
               {story.points} pt
             </span>

@@ -1,0 +1,19 @@
+{
+  "key": "qa.QAAgent.execution.s1.complete-item",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "\"\"\"Tests for story 3: Complete item (acceptance criteria as Given/When/Then comments).\"\"\"\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom app.main import app, items\n\nclient = TestClient(app)\n\n\n@pytest.fixture(autouse=True)\ndef clean_state():\n    items.clear()\n    yield\n    items.clear()\n\n\ndef add(title):\n    return client.post(\"/items\", json={\"title\": title}).json()\n\n\ndef test_marking_an_open_item_done_returns_it_completed():\n    # Given an open item When I mark it done Then it is returned as completed\n    item = add(\"Pay rent\")\n    response = client.post(f\"/items/{item['id']}/complete\")\n    assert response.status_code == 200\n    assert response.json()[\"done\"] is True\n    assert items[item[\"id\"]][\"done\"] is True\n\n\ndef test_completing_an_unknown_item_returns_404():\n    # Given an unknown item id When I mark it done Then the API answers 404\n    assert client.post(\"/items/9999/complete\").status_code == 404\n",
+        "path": "tests/test_story_3.py"
+      }
+    ],
+    "summary": "Wrote the acceptance tests for story 3"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

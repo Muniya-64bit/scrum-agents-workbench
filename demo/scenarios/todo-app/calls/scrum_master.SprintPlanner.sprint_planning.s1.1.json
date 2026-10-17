@@ -1,0 +1,30 @@
+{
+  "key": "scrum_master.SprintPlanner.sprint_planning.s1",
+  "n": 1,
+  "output": {
+    "goal": "Finish deleting items and let users edit a title",
+    "story_ids": [
+      4,
+      5
+    ],
+    "summary": "Planned the carried-over story and one new story (6 points)",
+    "tasks": [
+      {
+        "assignee": "developer",
+        "story_id": 5,
+        "title": "Implement: Edit title"
+      },
+      {
+        "assignee": "qa",
+        "story_id": 5,
+        "title": "Test: Edit title"
+      }
+    ]
+  },
+  "schema": "SprintPlanOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

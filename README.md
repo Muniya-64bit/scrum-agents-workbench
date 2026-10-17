@@ -9,8 +9,10 @@ each playing a Scrum role, takes it through the software development life cycle 
 produces real artifacts: backlog, design, code, tests and a release. A human approves the key
 ceremonies.
 
-> **Status:** Day 1 foundation is in place (data model, LLM wrapper, agent base class,
-> orchestrator, REST API). All six agents currently run as stubs; real agents are tracked in the
+> **Status:** All six agents are implemented and run end to end (idea to release, several sprints)
+> with a REST API, a web UI, GQM metrics, traceability, a retrospective that changes the process,
+> a scripted offline demo and a CI coverage gate. Live runs against the real model have not been
+> exercised end to end; open work is tracked in the
 > [issues](https://github.com/Muniya-64bit/scrum-agents-workbench/issues).
 
 ## Contents
@@ -21,6 +23,7 @@ ceremonies.
 - [API](#api)
 - [Project structure](#project-structure)
 - [Developing an agent](#developing-an-agent)
+- [Demo](#demo)
 - [Testing and linting](#testing-and-linting)
 - [Roadmap](#roadmap)
 - [Team and workflow](#team-and-workflow)
@@ -29,9 +32,14 @@ ceremonies.
 ## Features
 - Six role-based agents: Product Owner, Scrum Master, Architect, Developer, QA, DevOps
 - Scrum state machine with human approval gates at sprint planning and sprint review
-- Traceability from user story to design, code and tests
+- Traceability matrix story → design → code → tests with an artifact viewer
+- Metrics dashboard (GQM): burndown, velocity, quality, AI cost
+- Retrospective levers that change the next sprint, a versioned release per sprint and a
+  Plan-Do-Check-Act view of the improvement
 - Schema-validated agent output with retries, response caching and token usage logging
-- Mock mode (`MOCK_LLM=1`) so development and tests cost no tokens
+- Mock mode (`MOCK_LLM=1`) so development and tests cost no tokens, plus record/replay of LLM
+  answers keyed by meaning (`LLM_MODE`)
+- A scripted demo that plays three sprints offline, and a Playwright tour that records it as a video
 - Append-only event log that feeds the activity feed
 
 ## How it works
@@ -73,6 +81,15 @@ stateDiagram-v2
   release --> done
   done --> [*]
 ```
+
+### How the team improves each sprint
+The retrospective turns the sprint's measured results into typed process changes: the next
+capacity, the fix-retry limit, test-first and working agreements. Unfinished stories go back to the
+backlog. The next sprint is planned with those levers and records the process it used, and every
+sprint ends with a tagged release (`v0.1.0`, `v0.2.0`, ...). After a release the orchestrator plans
+another sprint while stories remain (at most `MAX_SPRINTS`). The Metrics page shows each sprint as
+a Plan-Do-Check-Act card, so you can see sprint 2 improve on sprint 1. See
+[docs/agents.md](docs/agents.md) and [docs/metrics.md](docs/metrics.md).
 
 ### One sprint, step by step
 ```mermaid
@@ -154,7 +171,11 @@ Set in `.env` (copy from `.env.example`).
 |---|---|---|
 | `ANTHROPIC_API_KEY` | empty | Claude API key, needed when `MOCK_LLM=0` |
 | `WORKBENCH_MODEL` | `claude-sonnet-5-5` | Model used by all agents |
-| `MOCK_LLM` | `1` | `1` returns canned output with no API calls |
+| `MOCK_LLM` | `1` | `1` returns canned output with no API calls (used when `LLM_MODE` is unset) |
+| `LLM_MODE` | from `MOCK_LLM` | `mock`, `live`, `record` or `replay` ([docs/development.md](docs/development.md#llm-modes)) |
+| `LLM_SCENARIO_DIR`, `LLM_REPLAY_FALLBACK` | empty, `error` | Scenario folder for record/replay; `mock` uses the mock answer when a recording is missing |
+| `DEFAULT_CAPACITY`, `DEFAULT_MAX_FIX_RETRIES`, `MAX_SPRINTS` | `10`, `3`, `3` | First sprint's points, Developer attempts per bug, sprints before the project ends |
+| `LLM_PRICE_INPUT_PER_MTOK`, `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0`, `10.0` | USD per million tokens for the cost estimate |
 | `DATABASE_URL` | `sqlite:///./workbench.db` | Database connection string |
 | `WORKSPACES_DIR` | `./workspaces` | Where generated project code is written |
 
@@ -173,7 +194,11 @@ Set in `.env` (copy from `.env.example`).
 | GET / PATCH | `/projects/{id}/tasks`, `/tasks/{id}` | List tasks, move a task on the board |
 | GET | `/projects/{id}/artifacts`, `/artifacts/{id}` | Design, code, test and release artifacts |
 | GET | `/projects/{id}/bugs` | Bugs from QA |
-| GET | `/projects/{id}/traceability` | Story -> design -> code -> test |
+| GET | `/projects/{id}/traceability` | Story -> design -> code -> test -> release |
+| GET | `/projects/{id}/releases` | Versioned release per sprint |
+| GET | `/projects/{id}/process` | Process levers now and for the next sprint |
+| GET | `/projects/{id}/metrics`, `/sprints/{id}/burndown` | GQM metrics, burndown series |
+| GET | `/projects/{id}/improvement` | One Plan-Do-Check-Act row per sprint |
 
 Full reference with examples: [docs/api.md](docs/api.md).
 
@@ -183,25 +208,40 @@ workbench/
   api/            FastAPI app
   agents/         BaseAgent, Tools API, registry (one module per real agent)
   db/             SQLAlchemy models, session, repository helpers
-  llm/            LLMClient: validation, retries, cache, mock mode
+  llm/            LLMClient: validation, retries, cache, mock / record / replay modes
   orchestrator/   Scrum state machine
   schemas.py      Shared agent output contracts
 tests/            pytest suite
 docs/             Architecture and Scrum process evidence
 frontend/         Web UI (React + Vite)
-scripts/          Demo seed and sample scripts
+scripts/          Demo runner (demo.py), scenario key lister, seed and sample scripts
+demo/scenarios/   Scripted demo scenarios (LLM answers as JSON)
 ```
 
 ## Developing an agent
 Subclass `BaseAgent`, register it in `workbench/agents/registry.py`, and test it in mock mode.
 The full guide with a worked example is in [docs/agents.md](docs/agents.md).
 
+## Demo
+A scripted scenario plays a whole project (three sprints, a caught bug, a carried-over story, a
+retrospective that changes the process, three tagged releases) offline and at no cost. The LLM
+answers are hand-written; everything else is real.
+
+```bash
+python scripts/demo.py run --scenario todo-app --fresh      # terminal, about 15 seconds
+python scripts/demo.py serve --scenario todo-app --fresh    # API for the UI (npm run dev in frontend/)
+```
+See [docs/demo.md](docs/demo.md).
+
 ## Testing and linting
 ```bash
 make test    # pytest
+make cov     # pytest with the coverage gate (total line coverage must stay at 95% or more)
 make lint    # ruff
 ```
-CI runs both on every pull request.
+CI runs lint, the tests with the coverage gate (`--cov-fail-under=95`) and the frontend checks on
+every pull request. Coverage is about 98% of `workbench/` today; the orchestrator, the Tools API,
+the base agent, the metrics engine and the release step are above 95%.
 
 ## Roadmap
 Three one-day sprints. See the issue labels `day-1`, `day-2` and `day-3`.
@@ -233,6 +273,8 @@ retrospectives are in [docs/scrum](docs/scrum).
 | [docs/agents.md](docs/agents.md) | How to build an agent |
 | [docs/api.md](docs/api.md) | REST API reference |
 | [docs/frontend.md](docs/frontend.md) | Web UI: running it, structure, design tokens |
+| [docs/demo.md](docs/demo.md) | Run the scripted demo, write a scenario, record a real run |
+| [docs/metrics.md](docs/metrics.md) | GQM goals, questions and metrics, how they are computed, limits |
 | [docs/scrum](docs/scrum/README.md) | Our stand-ups and retrospectives |
 
 ## License

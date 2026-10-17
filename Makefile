@@ -12,6 +12,9 @@ run:
 test:
 	$(PY) -m pytest -q
 
+cov:
+	$(PY) -m pytest -q --cov=workbench --cov-report=term-missing --cov-fail-under=95
+
 lint:
 	$(VENV)/bin/ruff check .
 

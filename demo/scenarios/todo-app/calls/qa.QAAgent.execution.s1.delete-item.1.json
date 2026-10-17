@@ -1,0 +1,19 @@
+{
+  "key": "qa.QAAgent.execution.s1.delete-item",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "\"\"\"Tests for story 4: Delete item (acceptance criteria as Given/When/Then comments).\"\"\"\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom app.main import app, items\n\nclient = TestClient(app)\n\n\n@pytest.fixture(autouse=True)\ndef clean_state():\n    items.clear()\n    yield\n    items.clear()\n\n\ndef add(title):\n    return client.post(\"/items\", json={\"title\": title}).json()\n\n\ndef test_a_deleted_item_is_gone_from_the_list():\n    # Given an item When I delete it Then it no longer appears in the list\n    item = add(\"Old news\")\n    assert client.delete(f\"/items/{item['id']}\").status_code == 200\n    assert client.get(\"/items\").json() == []\n\n\ndef test_deleting_an_unknown_item_returns_404():\n    # Given an unknown item id When I delete it Then the API answers 404\n    add(\"Keep me\")\n    status = client.delete(\"/items/9999\").status_code\n    assert status == 404, f\"expected 404 for an unknown id, got {status}\"\n    assert len(items) == 1\n",
+        "path": "tests/test_story_4.py"
+      }
+    ],
+    "summary": "Wrote the acceptance tests for story 4"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

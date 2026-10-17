@@ -44,7 +44,7 @@ def _fake_llm(monkeypatch, *replies: dict) -> LLMClient:
     """Real (non-mock) client whose API call returns the given JSON replies in order."""
     llm = LLMClient(mock=False, use_cache=False)
     it = iter(json.dumps(r) for r in replies)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: next(it))
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: next(it))
     return llm
 
 

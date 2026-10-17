@@ -1,0 +1,23 @@
+{
+  "key": "scrum_master.StandupAgent.review.s1",
+  "n": 1,
+  "output": {
+    "blockers": [
+      "Delete item answers 200 for an unknown id; the single fix attempt did not work"
+    ],
+    "summary": "7 of 10 points are done; Delete item is blocked",
+    "today": [
+      "Delete item still fails its tests"
+    ],
+    "yesterday": [
+      "Implemented and tested Create item, List items and Complete item",
+      "Fixed the missing empty-title check found by QA"
+    ]
+  },
+  "schema": "StandupOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

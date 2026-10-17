@@ -1,0 +1,21 @@
+{
+  "key": "architect.DesignDelta.execution.s2",
+  "n": 1,
+  "output": {
+    "designs": [
+      {
+        "api_spec": "paths:\n  /items/{item_id}:\n    patch:\n      responses:\n        '200': { description: Updated }\n        '404': { description: Unknown item }\n        '422': { description: Empty title }\n",
+        "diagram": "sequenceDiagram\n  U->>API: PATCH /items/1 {title}\n  API-->>U: 200, 404 or 422",
+        "notes": "## Edit title\n- Route `PATCH /items/{id}` with `{title}` changes the title.\n- A blank title answers 422 and keeps the old title; an unknown id answers 404.\n",
+        "story_id": 5
+      }
+    ],
+    "summary": "Designed the story added in sprint 2"
+  },
+  "schema": "DesignDeltaOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

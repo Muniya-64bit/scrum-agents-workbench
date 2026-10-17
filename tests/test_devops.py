@@ -101,7 +101,7 @@ def test_docker_failure_is_logged_without_failing_release(db: Session, tmp_path,
 
 
 def test_registered_and_runs_in_release_phase(db: Session, tmp_path, monkeypatch):
-    assert isinstance(AGENTS["devops"], DevOpsAgent)
+    assert isinstance(AGENTS["devops"].builder, DevOpsAgent)  # wrapped by ReleaseAgent (#18)
     monkeypatch.setattr("workbench.config.WORKSPACES_DIR", str(tmp_path))
     monkeypatch.setattr("workbench.agents.devops.shutil.which", lambda _: None)
     project = repo.create_project(db, "Todo", "A simple to-do app")

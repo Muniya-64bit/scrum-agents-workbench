@@ -1,0 +1,19 @@
+{
+  "key": "qa.QAAgent.execution.s3.filter-by-status",
+  "n": 1,
+  "output": {
+    "files": [
+      {
+        "content": "\"\"\"Tests for story 6: Filter by status (acceptance criteria as Given/When/Then comments).\"\"\"\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom app.main import app, items\n\nclient = TestClient(app)\n\n\n@pytest.fixture(autouse=True)\ndef clean_state():\n    items.clear()\n    yield\n    items.clear()\n\n\ndef add(title):\n    return client.post(\"/items\", json={\"title\": title}).json()\n\n\ndef _mixed():\n    done = add(\"Finished\")\n    add(\"Still open\")\n    client.post(f\"/items/{done['id']}/complete\")\n\n\ndef test_filtering_by_open_lists_only_open_items():\n    # Given open and completed items When I filter by open Then only open items are listed\n    _mixed()\n    response = client.get(\"/items\", params={\"status\": \"open\"})\n    assert [i[\"title\"] for i in response.json()] == [\"Still open\"]\n\n\ndef test_filtering_by_done_lists_only_completed_items():\n    # Given open and completed items When I filter by done Then only completed items are listed\n    _mixed()\n    response = client.get(\"/items\", params={\"status\": \"done\"})\n    assert [i[\"title\"] for i in response.json()] == [\"Finished\"]\n\n\ndef test_an_unknown_status_is_rejected():\n    # Given any items When I filter by an unknown status Then the API answers 422\n    _mixed()\n    assert client.get(\"/items\", params={\"status\": \"later\"}).status_code == 422\n",
+        "path": "tests/test_story_6.py"
+      }
+    ],
+    "summary": "Wrote the acceptance tests for story 6"
+  },
+  "schema": "CodeOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

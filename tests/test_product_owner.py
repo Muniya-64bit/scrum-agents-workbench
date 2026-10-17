@@ -55,7 +55,7 @@ def test_real_path_validates_and_retries_bad_json(db: Session, tmp_path, monkeyp
         '```json\n{"vision": "V", "epics": [{"title": "E", "stories": []}]}\n```',
     ])
     llm = LLMClient(mock=False, use_cache=False)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: next(replies))
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: next(replies))
     p = repo.create_project(db, "x", "y")
     ProductOwnerAgent(llm).run(db, p.id)
     db.refresh(p)

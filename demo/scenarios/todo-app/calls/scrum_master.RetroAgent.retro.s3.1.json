@@ -1,0 +1,26 @@
+{
+  "key": "scrum_master.RetroAgent.retro.s3",
+  "n": 1,
+  "output": {
+    "actions": [
+      "Keep the process for the next project"
+    ],
+    "process_changes": {
+      "reason": "The process worked; keep it"
+    },
+    "summary": "Sprint 3 finished the backlog",
+    "went_well": [
+      "Test-first kept the defect count at zero",
+      "The backlog is empty"
+    ],
+    "went_wrong": [
+      "Nothing measurable"
+    ]
+  },
+  "schema": "RetroOutput",
+  "source": "scripted",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}

@@ -19,6 +19,9 @@ class ProjectView(_ORM):
     idea: str
     phase: str
     awaiting_approval: bool
+    # True while the project is at `release` and another sprint will follow (stories left that
+    # fit the next capacity, fewer than MAX_SPRINTS sprints so far); always False otherwise
+    has_more_sprints: bool = False
 
 
 class StoryView(_ORM):
@@ -104,6 +107,7 @@ class TraceItem(BaseModel):
     name: str
     kind: str
     path: str
+    version: int = 1
 
 
 class TraceRow(BaseModel):
@@ -115,7 +119,87 @@ class TraceRow(BaseModel):
     design: list[TraceItem] = []
     code: list[TraceItem] = []
     test: list[TraceItem] = []
+    release: list[TraceItem] = []
     other: list[TraceItem] = []
+    sprint_number: int | None = None
+    tests_passed: int = 0
+    tests_failed: int = 0
+    last_test_ok: bool | None = None
+    open_bugs: int = 0
+    ac_count: int = 0
+    test_count: int = 0
+    complete: bool = False
+
+
+class ReleaseView(BaseModel):
+    """One `release_created` event joined with its release-notes artifact."""
+
+    artifact_id: int
+    version: str
+    sprint_id: int
+    sprint_number: int | None
+    created_at: datetime
+    story_ids: list[int]
+    sha: str
+
+
+class ProcessView(BaseModel):
+    """The levers of the current sprint and what the last retrospective changes for the next."""
+
+    current: dict
+    current_sprint_number: int | None
+    next: dict
+    next_changes: dict
+    next_reason: str
+
+
+class ImprovementPlan(BaseModel):
+    process: dict
+    changes_applied: dict
+    reason: str
+
+
+class ImprovementDo(BaseModel):
+    committed_points: int
+    completed_points: int
+
+
+class ImprovementCheck(BaseModel):
+    commitment_reliability: float | None
+    first_pass_yield: float | None
+    test_pass_rate: float | None
+    bugs_reported: int
+    fix_attempts: int
+    est_cost_usd: float
+
+
+class ImprovementDeltas(BaseModel):
+    """Change since the previous sprint; `None` for sprint 1 or when a value is missing."""
+
+    commitment_reliability: float | None
+    first_pass_yield: float | None
+    test_pass_rate: float | None
+    bugs_reported: float | None
+    fix_attempts: float | None
+    est_cost_usd: float | None
+
+
+class ImprovementAct(BaseModel):
+    went_well: list[str]
+    went_wrong: list[str]
+    actions: list[str]
+    proposed_changes: dict
+
+
+class ImprovementRow(BaseModel):
+    """One Plan-Do-Check-Act cycle (one sprint); see docs/metrics.md."""
+
+    sprint_number: int
+    plan: ImprovementPlan
+    do: ImprovementDo
+    check: ImprovementCheck
+    deltas: ImprovementDeltas
+    act: ImprovementAct
 
 
 class EventView(BaseModel):
@@ -125,3 +209,120 @@ class EventView(BaseModel):
     message: str
     payload: dict
     at: datetime
+
+
+class BurndownPoint(BaseModel):
+    t: float
+    step: int
+    at: datetime
+    remaining: float
+    story_id: int | None
+    label: str
+
+
+class IdealPoint(BaseModel):
+    t: float
+    remaining: float
+
+
+class BurndownView(BaseModel):
+    sprint_id: int
+    sprint_number: int
+    committed_points: float
+    remaining_points: float
+    duration_s: float
+    closed: bool
+    series: list[BurndownPoint]
+    ideal: list[IdealPoint]
+
+
+class SprintMetricsView(BaseModel):
+    """Per-sprint GQM metrics; see docs/metrics.md for each definition."""
+
+    sprint_id: int
+    sprint_number: int
+    goal: str
+    closed: bool
+    committed_points: int
+    committed_stories: int
+    completed_points: int
+    completed_stories: int
+    commitment_reliability: float | None
+    carried_over_stories: int
+    test_runs: int
+    first_pass_yield: float | None
+    test_pass_rate: float | None
+    bugs_reported: int
+    bugs_fixed_in_sprint: int
+    bugs_open_at_end: int
+    fix_attempts: int
+    retry_limit_hits: int
+    llm_calls: int
+    input_tokens: int
+    output_tokens: int
+    cache_hits: int
+    llm_invalid_outputs: int
+    est_cost_usd: float
+    cost_per_completed_point: float | None
+    trace_completeness: float | None
+    ac_coverage: float | None
+    duration_s: float
+    process: dict
+
+
+class ProjectTotalsView(BaseModel):
+    stories_total: int
+    stories_done: int
+    points_total: int
+    points_done: int
+    sprint_count: int
+    avg_velocity: float | None
+    total_llm_calls: int
+    total_input_tokens: int
+    total_output_tokens: int
+    total_cost_usd: float
+    llm_modes: list[str]
+    loc: int
+    trace_completeness: float | None
+
+
+class UsageView(BaseModel):
+    llm_calls: int
+    input_tokens: int
+    output_tokens: int
+    est_cost_usd: float
+
+
+class GqmMetric(BaseModel):
+    key: str
+    name: str
+    definition: str
+    unit: str
+
+
+class GqmQuestion(BaseModel):
+    id: str
+    text: str
+    metrics: list[GqmMetric]
+
+
+class GqmGoal(BaseModel):
+    id: str
+    goal: str
+    viewpoint: str
+    questions: list[GqmQuestion]
+
+
+class PricingView(BaseModel):
+    model: str
+    input_per_mtok: float
+    output_per_mtok: float
+    source: str
+
+
+class ProjectMetricsView(BaseModel):
+    project: ProjectTotalsView
+    sprints: list[SprintMetricsView]
+    unattributed: UsageView
+    gqm: list[GqmGoal]
+    pricing: PricingView

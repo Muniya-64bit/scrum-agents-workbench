@@ -2,7 +2,7 @@ import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { MockEventSource } from "../test/eventSource";
-import { project } from "../test/fixtures";
+import { processInfo, project } from "../test/fixtures";
 import { mockApi, renderApp } from "../test/utils";
 
 const backlogRoute = { "GET /projects/1/backlog": { vision: "", epics: [] } };
@@ -56,6 +56,46 @@ describe("phase controls", () => {
     renderApp("/projects/1/backlog");
     expect(await screen.findByText("Completed")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Start/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("sprint loop", () => {
+  it("offers Sprint planning after the release when another sprint follows", async () => {
+    mockApi({
+      ...backlogRoute,
+      "GET /projects/1": { ...project, phase: "release", has_more_sprints: true },
+    });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByRole("button", { name: "Start Sprint planning" })).toBeInTheDocument();
+  });
+
+  it("finishes the project after the release when no sprint follows", async () => {
+    mockApi({ ...backlogRoute, "GET /projects/1": { ...project, phase: "release" } });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByRole("button", { name: "Finish project" })).toBeInTheDocument();
+  });
+
+  it("shows the sprint number next to the current phase", async () => {
+    mockApi({
+      ...backlogRoute,
+      "GET /projects/1": project,
+      "GET /projects/1/process": processInfo,
+    });
+    renderApp("/projects/1/backlog");
+    const sprint = await screen.findByText("Sprint 1", { selector: ".phase-current .phase-sprint" });
+    expect(sprint).toBeInTheDocument();
+    expect(document.querySelectorAll(".phase-sprint")).toHaveLength(1);
+  });
+
+  it("leaves the phase bar alone before any sprint exists", async () => {
+    mockApi({
+      ...backlogRoute,
+      "GET /projects/1": { ...project, phase: "backlog" },
+      "GET /projects/1/process": { ...processInfo, current_sprint_number: null },
+    });
+    renderApp("/projects/1/backlog");
+    await screen.findByRole("button", { name: "Start Planning" });
+    expect(document.querySelector(".phase-sprint")).toBeNull();
   });
 });
 

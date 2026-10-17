@@ -22,7 +22,11 @@ All bodies are JSON. There is no authentication; run locally only.
 | GET | `/projects/{id}/artifacts?kind=` | Artifact list (without content) |
 | GET | `/artifacts/{id}` | One artifact with content and linked story ids |
 | GET | `/projects/{id}/bugs?status=` | Bugs filed against the project's stories |
-| GET | `/projects/{id}/traceability` | Story -> design -> code -> test table |
+| GET | `/projects/{id}/traceability` | Story -> design -> code -> test table with test results |
+| GET | `/projects/{id}/releases` | One release per finished sprint (`v0.N.0`) with its notes artifact |
+| GET | `/projects/{id}/process` | The sprint's process levers and the process planned for the next sprint |
+| GET | `/projects/{id}/metrics` | GQM metrics per sprint, project totals, cost |
+| GET | `/sprints/{id}/burndown` | Burndown series and ideal line of one sprint |
 
 Every response has a schema in the OpenAPI docs at `/docs`. Unknown ids return 404.
 
@@ -91,8 +95,12 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
 `code_committed`, `code_unchanged`, `code_skipped`,
 `file_rejected`, `bug_fixed`, `bug_fix_failed`, `bug_retry_limit`, `tests_committed`, `test_run`,
 `tests_skipped`, `tests_missing`, `bug_reopened`, `bug_verified`, `bugs_left_open`,
-`release_file_rejected`, `release_file_missing`, `release_file_unchanged`, `release_committed`,
-`docker_build_skipped`, `docker_build_succeeded`, `docker_build_failed`.
+`sprint_planned`, `release_file_rejected`, `release_file_missing`, `release_file_unchanged`, `release_committed`,
+`docker_build_skipped`, `docker_build_succeeded`, `docker_build_failed`, `vision_set`,
+`sprint_created`, `story_planned`, `sprint_skipped`, `story_carried_over`, `process_changed`,
+`burndown_snapshot`, `retro_saved`, `retro_exists`, `standup`, `tests_unchanged`,
+`tests_written_first`, `release_created`, `release_exists`, `release_skipped`,
+`llm_replay_drift`, `llm_replay_fallback`.
 
 ## Backlog
 `GET /projects/1/backlog`
@@ -104,6 +112,8 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
                          "acceptance_criteria": ["Given ... When ... Then ..."],
                          "priority": 1, "points": 3, "status": "backlog"}]}]}
 ```
+A story's `status` is `backlog` or `sprint` as stored, and `done` once all its tasks are done (derived
+when the response is built; the same value is used in sprint details and the traceability rows).
 
 ## Sprints
 `GET /projects/1/sprints` returns
@@ -122,11 +132,99 @@ The change is logged as a `task_updated` event with agent `human`. An invalid st
 
 ## Traceability
 `GET /projects/1/traceability` returns one row per backlog story. Artifacts are grouped by kind:
-`architecture`, `diagram` and `api_spec` go in `design`; `code` and `test` keep their names;
-anything else goes in `other`.
+`architecture`, `diagram` and `api_spec` go in `design`; `code`, `test` and `release` keep their
+names (`release` holds the `Release vX.Y.Z` notes of the sprints that released the story);
+anything else goes in `other`. The other fields summarise the story's quality state.
 ```json
-[{"story_id": 2, "title": "Add todo", "status": "backlog",
-  "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": ""}],
-  "code": [], "test": [], "other": []}]
+[{"story_id": 2, "title": "Add todo", "status": "sprint",
+  "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": "",
+              "version": 1}],
+  "code": [], "test": [], "release": [], "other": [],
+  "sprint_number": 1, "tests_passed": 2, "tests_failed": 0, "last_test_ok": true,
+  "open_bugs": 0, "ac_count": 2, "test_count": 2, "complete": false}]
 ```
+| Field | Meaning |
+|---|---|
+| `sprint_number` | Number of the story's current sprint, `null` when it is not planned |
+| `tests_passed`, `tests_failed`, `last_test_ok` | Result of the story's latest `test_run` (any sprint). `last_test_ok` is `null` when it never ran |
+| `open_bugs` | Bugs of the story with status `open` |
+| `ac_count` | Acceptance criteria of the story |
+| `test_count` | Test functions in the latest version of each test file traced to the story |
+| `complete` | The story has at least one design, one code and one test artifact |
+
+## Releases
+`GET /projects/1/releases` lists the releases, oldest first. Each sprint ends with one release
+(see "Release step" in [agents.md](agents.md)); `artifact_id` is the release notes artifact, open
+it with `GET /artifacts/{artifact_id}`. Unknown project: 404.
+```json
+[{"artifact_id": 21, "version": "v0.1.0", "sprint_id": 5, "sprint_number": 1,
+  "created_at": "2026-10-17T10:00:00", "story_ids": [2, 3], "sha": "0123456789abcdef..."}]
+```
+
+## Process
+`GET /projects/1/process` returns the levers of the latest sprint and the ones the next sprint will
+use once the retrospective's changes are applied (`next_changes` lists `[old, new]` pairs for the
+levers that change, `{}` when nothing changes). Before any sprint, `current` and `next` are the
+defaults. Unknown project: 404.
+```json
+{"current": {"capacity": 10, "max_fix_retries": 3, "test_first": false, "guidelines": []},
+ "current_sprint_number": 1,
+ "next": {"capacity": 7, "max_fix_retries": 3, "test_first": true,
+          "guidelines": ["Write the acceptance tests first and make them pass before committing"]},
+ "next_changes": {"capacity": [10, 7], "test_first": [false, true],
+                  "guidelines": [[], ["Write the acceptance tests first and make them pass before committing"]]},
+ "next_reason": "Commit to last sprint's velocity (yesterday's weather); ..."}
+```
+
+## Metrics
+`GET /projects/1/metrics` returns the GQM metrics (definitions in [metrics.md](metrics.md)).
+Ratios are `null` when they are undefined (for example no test ran). Unknown project: 404.
+```json
+{"project": {"stories_total": 4, "stories_done": 4, "sprint_count": 2, "avg_velocity": 5.0,
+             "total_cost_usd": 0.067, "llm_modes": ["live"], "trace_completeness": 0.25},
+ "sprints": [{"sprint_id": 5, "sprint_number": 1, "closed": true, "committed_points": 8,
+              "completed_points": 5, "commitment_reliability": 0.625, "first_pass_yield": 0.333,
+              "test_pass_rate": 0.8, "bugs_open_at_end": 1, "est_cost_usd": 0.04,
+              "process": {}}],
+ "unattributed": {"llm_calls": 1, "input_tokens": 1000, "output_tokens": 500,
+                  "est_cost_usd": 0.007},
+ "gqm": [{"id": "G1", "goal": "...", "viewpoint": "Scrum Master",
+          "questions": [{"id": "Q1", "text": "...", "metrics": [
+            {"key": "commitment_reliability", "name": "...", "definition": "...",
+             "unit": "ratio"}]}]}],
+ "pricing": {"model": "claude-sonnet-5-5", "input_per_mtok": 2.0, "output_per_mtok": 10.0,
+             "source": "..."}}
+```
+(The `project` and `sprints` objects are trimmed here; each lists every key from metrics.md.)
+
+## Burndown
+`GET /sprints/5/burndown` returns the points still open over time, rebuilt from task events.
+`t` is seconds since the sprint started and `step` is the point's index; draw `step` when
+`duration_s` is below one second. Unknown sprint: 404 `sprint not found`.
+```json
+{"sprint_id": 5, "sprint_number": 1, "committed_points": 8, "remaining_points": 3,
+ "duration_s": 125.0, "closed": true,
+ "series": [{"t": 0.0, "step": 0, "at": "2026-10-17T10:00:00", "remaining": 8,
+             "story_id": null, "label": "Sprint start"},
+            {"t": 40.2, "step": 1, "at": "2026-10-17T10:00:40", "remaining": 5,
+             "story_id": 3, "label": "Done: A: sign in"}],
+ "ideal": [{"t": 0.0, "remaining": 8}, {"t": 125.0, "remaining": 0}]}
+```
+
 `artifact_created`, `artifact_linked`, `design_skipped`, `design_missing`, `bug_reported`.
+
+## Improvement
+`GET /projects/1/improvement` returns one Plan-Do-Check-Act row per sprint (see
+[metrics.md](metrics.md)). Unknown project: 404. `GET /projects/{id}` also has `has_more_sprints`,
+true only while the project is at `release` and another sprint will follow.
+```json
+[{"sprint_number": 2,
+  "plan": {"process": {"capacity": 7, "max_fix_retries": 2, "test_first": true, "guidelines": []},
+           "changes_applied": {"capacity": [10, 7]}, "reason": "..."},
+  "do": {"committed_points": 7, "completed_points": 7},
+  "check": {"commitment_reliability": 1.0, "first_pass_yield": 1.0, "test_pass_rate": 1.0,
+            "bugs_reported": 1, "fix_attempts": 3, "est_cost_usd": 0.05},
+  "deltas": {"commitment_reliability": 0.3, "first_pass_yield": 0.667, "test_pass_rate": 0.2,
+             "bugs_reported": -2, "fix_attempts": 1, "est_cost_usd": 0.01},
+  "act": {"went_well": [], "went_wrong": [], "actions": [], "proposed_changes": {}}}]
+```

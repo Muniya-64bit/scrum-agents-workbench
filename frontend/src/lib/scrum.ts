@@ -18,10 +18,15 @@ export function phaseLabel(phase: Phase): string {
   return PHASES.find((p) => p.id === phase)?.label ?? phase;
 }
 
-export function nextPhase(phase: Phase): Phase | null {
+/** The phase a step moves to. After the release another sprint may follow (the sprint loop). */
+export function nextPhase(phase: Phase, hasMoreSprints = false): Phase | null {
+  if (phase === "release" && hasMoreSprints) return "sprint_planning";
   const i = PHASES.findIndex((p) => p.id === phase);
   return i >= 0 && i < PHASES.length - 1 ? PHASES[i + 1].id : null;
 }
+
+/** Phases that belong to a sprint, so the phase bar can say which one. */
+export const SPRINT_PHASES: Phase[] = ["sprint_planning", "execution", "review", "retro", "release"];
 
 export const STATUSES: { id: TaskStatus; label: string }[] = [
   { id: "todo", label: "To do" },

@@ -48,7 +48,7 @@ def _kinds(db: Session, project_id: int) -> list[str]:
 def _fake_llm(monkeypatch, *replies: dict) -> LLMClient:
     llm = LLMClient(mock=False, use_cache=False)
     it = iter(json.dumps(r) for r in replies)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt: next(it))
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: next(it))
     return llm
 
 
@@ -248,6 +248,7 @@ def test_execution_phase_end_to_end(db: Session, project: m.Project):
     ws = Workspace(project.id)
     assert f"tests/test_story_{story.id}.py" in ws.files()
     history = ws.history()
-    assert history[0] == "Prepare release"
+    assert history[0].startswith("Release v0.")  # the release step tags what DevOps prepared
+    assert "Prepare release" in history
     assert any(message.startswith("Story #") for message in history)
     assert any(message.startswith("Tests for story #") for message in history)
