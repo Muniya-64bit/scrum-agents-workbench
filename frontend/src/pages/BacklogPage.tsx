@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { api } from "../api/client";
-import type { Story } from "../api/types";
+import type { BacklogQuality, Nfr, Story } from "../api/types";
 import { IconList } from "../components/icons";
 import { ProcessChips } from "../components/ProcessChips";
 import { Badge, EmptyState, ErrorState, Loading, type Tone } from "../components/ui";
@@ -15,7 +15,7 @@ export function BacklogPage() {
   if (backlog.error) return <ErrorState error={backlog.error} onRetry={backlog.reload} />;
   if (!backlog.data) return <Loading label="Loading backlog" />;
 
-  const { vision, epics } = backlog.data;
+  const { vision, epics, nfrs = [], quality = null } = backlog.data;
   const stories = epics.flatMap((e) => e.stories);
   if (stories.length === 0 && epics.length === 0) {
     return (
@@ -46,6 +46,9 @@ export function BacklogPage() {
         <Stat label="Story points" value={points} />
         <Stat label="In a sprint" value={`${planned} / ${stories.length}`} />
       </dl>
+
+      {nfrs.length > 0 && <NfrPanel nfrs={nfrs} />}
+      {quality && <QualityPanel quality={quality} />}
 
       {epics.map((epic) => (
         <section key={epic.id} className="panel epic" aria-labelledby={`epic-${epic.id}`}>
@@ -81,6 +84,65 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+/** Constraints on the whole system, each with a target that can be tested. */
+function NfrPanel({ nfrs }: { nfrs: Nfr[] }) {
+  return (
+    <section className="panel req-panel" aria-labelledby="nfr-title">
+      <h2 id="nfr-title" className="req-title">
+        Non-functional requirements
+      </h2>
+      <ul className="req-list">
+        {nfrs.map((n, i) => (
+          <li key={i} className="req-item">
+            <span className="story-id">NFR-{i + 1}</span>
+            <Badge tone="accent">{n.category}</Badge>
+            <span>
+              {n.requirement}
+              <span className="req-measure">Measure: {n.measure}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The rule-based backlog check: requirements validation without the LLM. */
+function QualityPanel({ quality }: { quality: BacklogQuality }) {
+  const { warnings } = quality;
+  return (
+    <section className="panel req-panel" aria-labelledby="quality-title">
+      <h2 id="quality-title" className="req-title">
+        Backlog check{" "}
+        {warnings.length === 0 ? (
+          <Badge tone="done">No issues</Badge>
+        ) : (
+          <Badge tone="testing">
+            {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
+          </Badge>
+        )}
+      </h2>
+      {warnings.length === 0 ? (
+        <p className="muted">
+          All {quality.stories} stories are complete, testable and use clear wording.
+        </p>
+      ) : (
+        <ul className="req-list">
+          {warnings.map((w, i) => (
+            <li key={i} className="req-item">
+              <span className="story-id">{w.story_id === null ? "NFR" : `#${w.story_id}`}</span>
+              <span>
+                {w.message}
+                {w.detail && <span className="req-measure">{w.detail}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

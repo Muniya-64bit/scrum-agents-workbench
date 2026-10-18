@@ -201,7 +201,9 @@ function PhaseActions({
       >
         {busy === "advance"
           ? "Agents working…"
-          : next === "done" || !next
+          : project.replanning
+            ? "Plan the sprint again"
+            : next === "done" || !next
             ? "Finish project"
             : project.phase === "release"
               ? "Start Sprint planning"

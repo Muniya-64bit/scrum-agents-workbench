@@ -10,8 +10,12 @@ import { IconCheck, IconX } from "./icons";
 import { Badge, Button, Spinner } from "./ui";
 
 const GATE_TEXT: Record<string, string> = {
-  sprint_planning: "The Scrum Master planned this sprint. Approve it to start execution.",
-  review: "The sprint is finished. Approve the increment to move on to the retrospective.",
+  sprint_planning:
+    "The Scrum Master planned this sprint. Approve it to start execution, or reject it to send " +
+    "the stories back and have the sprint planned again with your reason.",
+  review:
+    "The sprint is finished. Approve the increment to move on to the retrospective. If you " +
+    "reject it, the retrospective has to respond to your reason.",
 };
 
 async function latestSprint(projectId: number): Promise<SprintDetail | null> {

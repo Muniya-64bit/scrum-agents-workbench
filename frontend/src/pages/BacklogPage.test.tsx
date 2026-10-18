@@ -49,6 +49,41 @@ describe("BacklogPage", () => {
     expect(screen.queryByText(/Next sprint/)).toBeNull(); // only at the retro and release
   });
 
+  it("shows the non-functional requirements and the backlog check", async () => {
+    mockApi({
+      "GET /projects/1": project,
+      "GET /projects/1/backlog": {
+        ...backlog,
+        nfrs: [{ category: "product", requirement: "The API shall be quick.", measure: "p95 < 300 ms" }],
+        quality: {
+          stories: 1,
+          flagged_stories: 1,
+          warnings: [
+            { rule: "vague_wording", story_id: 10, message: "Wording is vague", detail: "easy" },
+            { rule: "nfr_not_measurable", story_id: null, message: "No target", detail: "" },
+          ],
+        },
+      },
+    });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByText("Non-functional requirements")).toBeInTheDocument();
+    expect(screen.getByText("NFR-1")).toBeInTheDocument();
+    expect(screen.getByText("Measure: p95 < 300 ms")).toBeInTheDocument();
+    expect(screen.getByText("2 warnings")).toBeInTheDocument();
+    expect(screen.getByText("Wording is vague")).toBeInTheDocument();
+    expect(screen.getByText("NFR")).toBeInTheDocument();
+  });
+
+  it("says when the backlog check found nothing", async () => {
+    mockApi({
+      "GET /projects/1": project,
+      "GET /projects/1/backlog": { ...backlog, quality: { stories: 1, flagged_stories: 0, warnings: [] } },
+    });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByText("No issues")).toBeInTheDocument();
+    expect(screen.queryByText("Non-functional requirements")).toBeNull();
+  });
+
   it("tells the user how to get a backlog when it is empty", async () => {
     mockApi({
       "GET /projects/1": { ...project, phase: "idea" },

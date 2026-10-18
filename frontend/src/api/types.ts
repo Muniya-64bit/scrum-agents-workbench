@@ -28,6 +28,8 @@ export interface Project {
   awaiting_approval: boolean;
   /** True at `release` when another sprint follows (see the orchestrator's sprint loop). */
   has_more_sprints: boolean;
+  /** True after the human rejected the sprint plan: the next step plans the same sprint again. */
+  replanning?: boolean;
 }
 
 export interface Story {
@@ -51,9 +53,33 @@ export interface Epic {
   stories: Story[];
 }
 
+/** A non-functional requirement with a measurable target. */
+export interface Nfr {
+  category: string;
+  requirement: string;
+  measure: string;
+}
+
+export interface QualityWarning {
+  rule: string;
+  /** null for a warning about a non-functional requirement */
+  story_id: number | null;
+  message: string;
+  detail: string;
+}
+
+/** The latest rule-based backlog check (the `backlog_validated` event). */
+export interface BacklogQuality {
+  stories: number;
+  flagged_stories: number;
+  warnings: QualityWarning[];
+}
+
 export interface Backlog {
   vision: string;
   epics: Epic[];
+  nfrs?: Nfr[];
+  quality?: BacklogQuality | null;
 }
 
 export interface Task {
