@@ -102,11 +102,18 @@ Rules:
         if actions:
             lines += ["", "Retro actions from the previous sprint, follow these:"]
             lines += [f"- {a}" for a in actions]
+        if _rejected_sprint(db, project_id):
+            reason = _rejection_reason(db, project_id, "sprint_planning")
+            lines += ["", "The human rejected your previous plan for this sprint. "
+                      "Plan it again and address the reason:",
+                      f"- {reason or 'No reason given; reconsider the scope and the tasks.'}"]
         return "\n".join(lines)
 
     def mock_output(self, db: Session, project_id: int, task: dict) -> dict:
         capacity = self._process(db, project_id, task)[3]
         chosen = _select_stories(repo.unplanned_stories(db, project_id), [], capacity)
+        if _rejected_sprint(db, project_id) and len(chosen) > 1:
+            chosen = chosen[:-1]  # the plan was rejected: commit to less
         tasks = []
         for s in chosen:
             if _has_tasks(db, s.id):  # carried over: keeps its tasks
@@ -125,7 +132,9 @@ Rules:
         if not chosen:
             tools.log("sprint_skipped", "No planned stories fit the sprint")
             return
-        sprint = tools.create_sprint(out.goal, capacity)
+        rejected = _rejected_sprint(tools.db, tools.project_id)
+        sprint = (tools.reopen_sprint(rejected.id, out.goal, capacity) if rejected
+                  else tools.create_sprint(out.goal, capacity))
         for story in chosen:
             tools.add_story_to_sprint(sprint.id, story.id)
             if _has_tasks(tools.db, story.id):  # carried over: keep its tasks
@@ -233,18 +242,28 @@ Base it on the sprint data you are given. Do not invent events.
             "Propose process_changes only when the data supports them; "
             "leave fields null to keep them.",
         ]
+        rejection = _review_rejection(db, sprint)
+        if rejection is not None:
+            lines += ["", "The human REJECTED this sprint's review. Respond to it in went_wrong "
+                      "and give at least one action that addresses it. Reason:",
+                      f"- {rejection or 'No reason given.'}"]
         return "\n".join(lines)
 
     def mock_output(self, db: Session, project_id: int, task: dict) -> dict:
         sprint = repo.current_sprint(db, project_id)
         changes = ProcessChanges()
+        went_wrong = ["Work was not tracked in small enough tasks"]
+        actions = ["Split large tasks so each fits in one stand-up cycle"]
         if sprint:
             changes = suggest_process_changes(metrics.sprint_metrics(db, sprint),
                                               current_process(db, project_id))
+            rejection = _review_rejection(db, sprint)
+            if rejection is not None:
+                went_wrong.append(f"The sprint review was rejected: {rejection or 'no reason'}")
+                actions.append(f"Address the review feedback: {rejection or 'ask the reviewer'}")
         return {"summary": "Retrospective complete",
                 "went_well": ["The sprint goal was clear"],
-                "went_wrong": ["Work was not tracked in small enough tasks"],
-                "actions": ["Split large tasks so each fits in one stand-up cycle"],
+                "went_wrong": went_wrong, "actions": actions,
                 "process_changes": changes.model_dump()}
 
     def run(self, db: Session, project_id: int, task: dict | None = None) -> BaseModel:
@@ -325,6 +344,33 @@ def _carried_over_ids(db: Session, project_id: int) -> set[int]:
     """Stories that an earlier retrospective returned to the backlog."""
     return {e.payload["story_id"] for e in repo.events_since(db, project_id)
             if e.kind == "story_carried_over"}
+
+
+def _rejected_sprint(db: Session, project_id: int) -> m.Sprint | None:
+    """The latest sprint, if its plan was rejected and it waits to be planned again."""
+    sprint = repo.current_sprint(db, project_id)
+    return sprint if sprint is not None and sprint.status == "replanning" else None
+
+
+def _rejection_reason(db: Session, project_id: int, phase: str) -> str:
+    """The human's reason on the latest `rejected` event of a gate, or ""."""
+    for e in reversed(repo.events_since(db, project_id)):
+        if e.kind == "rejected" and (e.payload or {}).get("phase") == phase:
+            return e.message
+    return ""
+
+
+def _review_rejection(db: Session, sprint: m.Sprint) -> str | None:
+    """The reason the human rejected this sprint's review ("" if none given), or None when the
+    review was not rejected."""
+    after = 0
+    for e in repo.events_since(db, sprint.project_id):
+        if e.kind == "sprint_planned" and (e.payload or {}).get("sprint_id") == sprint.id:
+            after = e.id
+    for e in reversed(repo.events_since(db, sprint.project_id, after)):
+        if e.kind in ("approved", "rejected") and (e.payload or {}).get("phase") == "review":
+            return e.message if e.kind == "rejected" else None
+    return None
 
 
 def _previous_retro_actions(db: Session, project_id: int) -> list[str]:

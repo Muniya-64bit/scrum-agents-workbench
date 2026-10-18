@@ -90,6 +90,23 @@
         "title": "Find to-dos"
       }
     ],
+    "nfrs": [
+      {
+        "category": "product",
+        "measure": "95% of requests answered in under 200 ms with 1,000 items",
+        "requirement": "The API shall answer every request within a fixed time limit."
+      },
+      {
+        "category": "product",
+        "measure": "100% of invalid requests answered with 422 and no item changed",
+        "requirement": "The API shall reject invalid input without changing any data."
+      },
+      {
+        "category": "organizational",
+        "measure": "At least 1 passing pytest test per acceptance criterion",
+        "requirement": "Every story shall be covered by automated tests before release."
+      }
+    ],
     "summary": "Created a backlog with 2 epics and 6 stories (16 points)",
     "vision": "A tiny to-do web API that lets people add, list, complete, edit, delete and filter their to-do items."
   },

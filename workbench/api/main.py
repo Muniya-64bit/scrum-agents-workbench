@@ -5,19 +5,22 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import metrics, process
+from workbench import metrics, process, process_model, requirements
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
 from workbench.api.sse import event_stream, event_view
 from workbench.api.views import (
+    ActivityView,
     ArtifactSummary,
     ArtifactView,
+    BacklogQualityView,
     BacklogView,
     BugView,
     BurndownView,
     EpicView,
     EventView,
     ImprovementRow,
+    NfrView,
     ProcessView,
     ProjectMetricsView,
     ProjectView,
@@ -76,6 +79,8 @@ def _view(db: Session, p: m.Project) -> ProjectView:
     view = ProjectView.model_validate(p)
     if p.phase == "release":
         view.has_more_sprints = Orchestrator(db).more_sprints(p.id)
+    elif p.phase == "sprint_planning" and not p.awaiting_approval:
+        view.replanning = Orchestrator(db).replanning(p.id)
     return view
 
 
@@ -146,7 +151,10 @@ def backlog(project_id: int, db: Session = Depends(get_session)):
     epics = [EpicView(id=e.id, title=e.title, description=e.description,
                       stories=_by_priority(e.stories))
              for e in repo.epics(db, project_id)]
-    return BacklogView(vision=p.vision, epics=epics)
+    check = requirements.latest_check(db, project_id)
+    return BacklogView(vision=p.vision, epics=epics,
+                       nfrs=[NfrView(**n) for n in requirements.nfrs(db, project_id)],
+                       quality=BacklogQualityView(**check) if check else None)
 
 
 @app.get("/projects/{project_id}/sprints", response_model=list[SprintView])
@@ -250,6 +258,12 @@ def process_view(project_id: int, db: Session = Depends(get_session)):
     return ProcessView(current=process.current_process(db, project_id).model_dump(),
                        current_sprint_number=sprint.number if sprint else None,
                        next=nxt.model_dump(), next_changes=diff, next_reason=reason)
+
+
+@app.get("/process/model", response_model=list[ActivityView])
+def process_model_view():
+    """The process model: per phase the roles, product flow, entry/exit criteria and RACI row."""
+    return [ActivityView(**a) for a in process_model.as_dict()]
 
 
 # --- Metrics ----------------------------------------------------------------------------------
