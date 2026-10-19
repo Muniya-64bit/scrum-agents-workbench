@@ -59,19 +59,19 @@ export function TraceabilityPage() {
     setParams(next, { replace: true });
   };
 
-  const planned = rows.filter((r) => r.sprint_number !== null);
+  const planned = rows.filter((r) => r.sprints.length > 0);
   const acTotal = rows.reduce((sum, r) => sum + r.ac_count, 0);
   const acCovered = rows.reduce((sum, r) => sum + Math.min(r.test_count, r.ac_count), 0);
-  const sprintNumbers = [...new Set(planned.map((r) => r.sprint_number as number))].sort(
-    (a, b) => a - b,
-  );
+  // every sprint any story was planned into, so a sprint whose unfinished stories were carried
+  // over is still listed
+  const sprintNumbers = [...new Set(rows.flatMap((r) => r.sprints))].sort((a, b) => a - b);
 
   const shown = rows.filter((r) => {
-    if (sprint === "none" ? r.sprint_number !== null : sprint !== "all" && r.sprint_number !== Number(sprint)) {
+    if (sprint === "none" ? r.sprints.length > 0 : sprint !== "all" && !r.sprints.includes(Number(sprint))) {
       return false;
     }
     if (status !== "all" && r.status !== status) return false;
-    if (gapsOnly && (r.sprint_number === null || r.complete)) return false;
+    if (gapsOnly && (r.sprints.length === 0 || r.complete)) return false;
     return true;
   });
 
@@ -101,7 +101,7 @@ export function TraceabilityPage() {
                 Sprint {n}
               </option>
             ))}
-            <option value="none">Not planned</option>
+            <option value="none">Never planned</option>
           </select>
         </label>
         <label className="filter">
@@ -177,7 +177,7 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function TraceRowView({ row, onOpen }: { row: TraceRow; onOpen: (id: number) => void }) {
-  const gap = row.sprint_number !== null && !row.complete ? missing(row) : "";
+  const gap = row.sprints.length > 0 && !row.complete ? missing(row) : "";
   const gapId = `gap-${row.story_id}`;
   return (
     <tr>
@@ -198,7 +198,11 @@ function TraceRowView({ row, onOpen }: { row: TraceRow; onOpen: (id: number) => 
         </div>
         <div className="trace-story-meta">
           <Badge tone={row.status === "backlog" ? "neutral" : "doing"}>{row.status}</Badge>
-          {row.sprint_number !== null && <span className="muted">Sprint {row.sprint_number}</span>}
+          {row.sprints.length > 0 && (
+            <span className="muted">
+              {row.sprints.length === 1 ? "Sprint" : "Sprints"} {row.sprints.join(", ")}
+            </span>
+          )}
         </div>
       </th>
       <td>

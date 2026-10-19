@@ -666,8 +666,24 @@ def project_metrics(db: Session, project_id: int) -> dict:
 # --- traceability matrix details ---------------------------------------------------------------
 
 
+def _sprint_history(events: list[m.Event]) -> dict[int, set[int]]:
+    """Sprint ids each story was planned into. A story that is carried over keeps the sprint it
+    was in; only a rejected plan (`story_unplanned`) takes it out again."""
+    planned: dict[int, set[int]] = {}
+    for e in events:
+        story_id, sprint_id = (e.payload or {}).get("story_id"), (e.payload or {}).get("sprint_id")
+        if story_id is None or sprint_id is None:
+            continue
+        if e.kind == "story_planned":
+            planned.setdefault(story_id, set()).add(sprint_id)
+        elif e.kind == "story_unplanned":
+            planned.get(story_id, set()).discard(sprint_id)
+    return planned
+
+
 def trace_details(db: Session, project_id: int) -> dict[int, dict]:
-    """Per story: sprint number, latest test result, open bugs, AC and test counts, completeness."""
+    """Per story: its current sprint and every sprint it was planned into, latest test result,
+    open bugs, AC and test counts, completeness."""
     ctx = _Ctx.load(db, project_id)
     number = {s.id: s.number for s in ctx.sprints}
     last_run: dict[int, m.Event] = {}
@@ -675,12 +691,15 @@ def trace_details(db: Session, project_id: int) -> dict[int, dict]:
         if e.kind == "test_run" and (e.payload or {}).get("story_id") is not None:
             last_run[e.payload["story_id"]] = e
     open_bugs = Counter(b.story_id for b in repo.bugs(db, project_id, "open"))
+    in_sprints = _sprint_history(ctx.events)
     details = {}
     for sid, story in ctx.stories.items():
         run = last_run.get(sid)
         payload = run.payload if run else {}
         details[sid] = {
             "sprint_number": number.get(story.sprint_id),
+            "sprints": sorted({number[i] for i in in_sprints.get(sid, set()) | {story.sprint_id}
+                               if i in number}),
             "tests_passed": int(payload.get("passed") or 0),
             "tests_failed": int(payload.get("failed") or 0),
             "last_test_ok": bool(payload.get("ok")) if run else None,

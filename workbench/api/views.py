@@ -146,7 +146,8 @@ class TraceRow(BaseModel):
     test: list[TraceItem] = []
     release: list[TraceItem] = []
     other: list[TraceItem] = []
-    sprint_number: int | None = None
+    sprint_number: int | None = None  # the sprint the story is in now
+    sprints: list[int] = []  # every sprint it was planned into, carried-over ones included
     tests_passed: int = 0
     tests_failed: int = 0
     last_test_ok: bool | None = None

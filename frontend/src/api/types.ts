@@ -252,6 +252,8 @@ export interface TraceRow {
   release: TraceItem[];
   other: TraceItem[];
   sprint_number: number | null;
+  /** Every sprint the story was planned into, carried-over ones included. */
+  sprints: number[];
   tests_passed: number;
   tests_failed: number;
   last_test_ok: boolean | null;
