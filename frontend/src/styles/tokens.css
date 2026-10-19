@@ -1,5 +1,7 @@
-/* Design tokens. Neutral base (Linear-style), Primer-style status colors, one indigo accent.
-   Light is the default; dark follows the OS unless the user picks a theme (data-theme). */
+/* Design tokens: the shadcn/ui "neutral" theme in black and white only.
+   Light is the default; dark follows the OS unless the user picks a theme (data-theme).
+   Status is shown by how dark a mark is (todo lightest, done black), not by hue, and the text
+   next to it always says the status too. */
 
 :root {
   color-scheme: light;
@@ -7,50 +9,53 @@
   --font-sans: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --bg: #f7f8fa;
+  /* shadcn: background, card, muted, accent, border, input, foreground, primary, ring */
+  --bg: #fafafa;
   --surface: #ffffff;
-  --surface-muted: #f1f3f6;
-  --surface-hover: #eef0f4;
-  --border: #e3e6eb;
-  --border-strong: #cfd4dc;
-  --text: #1b1f24;
-  --text-muted: #5e6773;
-  --text-subtle: #8a929c;
+  --surface-muted: #f5f5f5;
+  --surface-hover: #f5f5f5;
+  --border: #e5e5e5;
+  --border-strong: #d4d4d4;
+  --text: #0a0a0a;
+  --text-muted: #525252;
+  --text-subtle: #737373;
 
-  --accent: #5b5bd6;
-  --accent-hover: #4b4bc4;
-  --accent-soft: #ededfc;
-  --accent-text: #4343b8;
-  --on-accent: #ffffff;
-  --focus-ring: 0 0 0 3px rgb(91 91 214 / 0.35);
+  /* shadcn "primary": black on white */
+  --accent: #171717;
+  --accent-hover: #262626;
+  --accent-soft: #f5f5f5;
+  --accent-text: #0a0a0a;
+  --on-accent: #fafafa;
+  --focus-ring: 0 0 0 3px rgb(10 10 10 / 0.18);
 
-  /* Task status */
-  --status-todo: #6b7280;
-  --status-todo-soft: #f0f1f3;
-  --status-doing: #2f80ed;
-  --status-doing-soft: #e8f1fd;
-  --status-testing: #b45309;
-  --status-testing-soft: #fdf3e3;
-  --status-done: #15803d;
-  --status-done-soft: #e7f6ec;
-  --danger: #dc2626;
-  --danger-soft: #fdecec;
+  /* Task status: darker means further along */
+  --status-todo: #d4d4d4;
+  --status-todo-soft: #f5f5f5;
+  --status-doing: #a3a3a3;
+  --status-doing-soft: #ededed;
+  --status-testing: #525252;
+  --status-testing-soft: #e5e5e5;
+  --status-done: #0a0a0a;
+  --status-done-soft: #d4d4d4;
+  --danger: #0a0a0a;
+  --danger-soft: #f5f5f5;
 
-  /* Agent roles */
-  --role-product_owner: #8b5cf6;
-  --role-scrum_master: #0d9488;
-  --role-architect: #5b5bd6;
-  --role-developer: #2f80ed;
-  --role-qa: #d97706;
-  --role-devops: #64748b;
-  --role-human: #1b1f24;
+  /* Agent roles: grey steps with white initials */
+  --on-role: #ffffff;
+  --role-product_owner: #0a0a0a;
+  --role-scrum_master: #262626;
+  --role-architect: #404040;
+  --role-developer: #525252;
+  --role-qa: #666666;
+  --role-devops: #7a7a7a;
+  --role-human: #0a0a0a;
 
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
-  --shadow: 0 1px 3px rgb(16 24 40 / 0.08), 0 1px 2px rgb(16 24 40 / 0.04);
-  --shadow-lg: 0 10px 24px rgb(16 24 40 / 0.12);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
   --sidebar-width: 240px;
 }
@@ -58,75 +63,81 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0f1115;
-    --surface: #171a21;
-    --surface-muted: #1d212a;
-    --surface-hover: #222733;
-    --border: #2a2f3a;
-    --border-strong: #3a4150;
-    --text: #e6e8eb;
-    --text-muted: #9aa3ae;
-    --text-subtle: #6f7884;
-    --accent: #7c7cf0;
-    --accent-hover: #9090f5;
-    --accent-soft: #23234a;
-    --accent-text: #a5a5f7;
-    --on-accent: #0f1115;
-    --focus-ring: 0 0 0 3px rgb(124 124 240 / 0.45);
-    --status-todo: #9ca3af;
-    --status-todo-soft: #23272f;
-    --status-doing: #60a5fa;
-    --status-doing-soft: #172338;
-    --status-testing: #fbbf24;
-    --status-testing-soft: #2e2512;
-    --status-done: #4ade80;
-    --status-done-soft: #12291b;
-    --danger: #f87171;
-    --danger-soft: #331717;
-    --role-architect: #7c7cf0;
-    --role-developer: #60a5fa;
-    --role-qa: #fbbf24;
-    --role-devops: #94a3b8;
-    --role-human: #e6e8eb;
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow: 0 1px 3px rgb(0 0 0 / 0.45);
-    --shadow-lg: 0 12px 28px rgb(0 0 0 / 0.5);
+    --bg: #0a0a0a;
+    --surface: #0a0a0a;
+    --surface-muted: #171717;
+    --surface-hover: #262626;
+    --border: #262626;
+    --border-strong: #404040;
+    --text: #fafafa;
+    --text-muted: #a3a3a3;
+    --text-subtle: #8a8a8a;
+    --accent: #fafafa;
+    --accent-hover: #e5e5e5;
+    --accent-soft: #262626;
+    --accent-text: #fafafa;
+    --on-accent: #171717;
+    --focus-ring: 0 0 0 3px rgb(250 250 250 / 0.25);
+    --status-todo: #404040;
+    --status-todo-soft: #171717;
+    --status-doing: #737373;
+    --status-doing-soft: #1f1f1f;
+    --status-testing: #a3a3a3;
+    --status-testing-soft: #262626;
+    --status-done: #fafafa;
+    --status-done-soft: #404040;
+    --danger: #fafafa;
+    --danger-soft: #171717;
+    --on-role: #0a0a0a;
+    --role-product_owner: #fafafa;
+    --role-scrum_master: #e5e5e5;
+    --role-architect: #d4d4d4;
+    --role-developer: #bdbdbd;
+    --role-qa: #a3a3a3;
+    --role-devops: #8a8a8a;
+    --role-human: #fafafa;
+    --shadow-sm: none;
+    --shadow: none;
+    --shadow-lg: 0 12px 28px rgb(0 0 0 / 0.6);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0f1115;
-  --surface: #171a21;
-  --surface-muted: #1d212a;
-  --surface-hover: #222733;
-  --border: #2a2f3a;
-  --border-strong: #3a4150;
-  --text: #e6e8eb;
-  --text-muted: #9aa3ae;
-  --text-subtle: #6f7884;
-  --accent: #7c7cf0;
-  --accent-hover: #9090f5;
-  --accent-soft: #23234a;
-  --accent-text: #a5a5f7;
-  --on-accent: #0f1115;
-  --focus-ring: 0 0 0 3px rgb(124 124 240 / 0.45);
-  --status-todo: #9ca3af;
-  --status-todo-soft: #23272f;
-  --status-doing: #60a5fa;
-  --status-doing-soft: #172338;
-  --status-testing: #fbbf24;
-  --status-testing-soft: #2e2512;
-  --status-done: #4ade80;
-  --status-done-soft: #12291b;
-  --danger: #f87171;
-  --danger-soft: #331717;
-  --role-architect: #7c7cf0;
-  --role-developer: #60a5fa;
-  --role-qa: #fbbf24;
-  --role-devops: #94a3b8;
-  --role-human: #e6e8eb;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow: 0 1px 3px rgb(0 0 0 / 0.45);
-  --shadow-lg: 0 12px 28px rgb(0 0 0 / 0.5);
+  --bg: #0a0a0a;
+  --surface: #0a0a0a;
+  --surface-muted: #171717;
+  --surface-hover: #262626;
+  --border: #262626;
+  --border-strong: #404040;
+  --text: #fafafa;
+  --text-muted: #a3a3a3;
+  --text-subtle: #8a8a8a;
+  --accent: #fafafa;
+  --accent-hover: #e5e5e5;
+  --accent-soft: #262626;
+  --accent-text: #fafafa;
+  --on-accent: #171717;
+  --focus-ring: 0 0 0 3px rgb(250 250 250 / 0.25);
+  --status-todo: #404040;
+  --status-todo-soft: #171717;
+  --status-doing: #737373;
+  --status-doing-soft: #1f1f1f;
+  --status-testing: #a3a3a3;
+  --status-testing-soft: #262626;
+  --status-done: #fafafa;
+  --status-done-soft: #404040;
+  --danger: #fafafa;
+  --danger-soft: #171717;
+  --on-role: #0a0a0a;
+  --role-product_owner: #fafafa;
+  --role-scrum_master: #e5e5e5;
+  --role-architect: #d4d4d4;
+  --role-developer: #bdbdbd;
+  --role-qa: #a3a3a3;
+  --role-devops: #8a8a8a;
+  --role-human: #fafafa;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-lg: 0 12px 28px rgb(0 0 0 / 0.6);
 }

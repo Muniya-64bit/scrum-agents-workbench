@@ -90,15 +90,19 @@ since the sprint started, or the step number when the sprint lasted less than a 
 runs). Change values and wording in `lib/format.ts`; the numbers come ready-made from the API.
 
 ## Design
-Neutral base in the style of Linear, status colors in the style of GitHub Primer, one indigo
-accent. All colors are CSS variables in `src/styles/tokens.css`, defined for light and dark mode.
-Dark mode follows the OS until the user picks one with the sidebar toggle.
+The theme is the [shadcn/ui](https://ui.shadcn.com) "neutral" palette in black and white only.
+Buttons, badges, cards and inputs follow shadcn's sizes (36px controls, 6 to 12px radius, a
+1px border, a soft ring on focus). All colors are CSS variables in `src/styles/tokens.css`,
+defined for light and dark mode. Dark mode follows the OS until the user picks one with the
+sidebar toggle.
+
+There is no hue, so meaning never depends on color alone:
 
 | Token | Use |
 |---|---|
-| `--accent` `#5B5BD6` | Primary buttons, links, current phase |
-| `--status-todo` / `doing` / `testing` / `done` | Board columns and status badges |
-| `--danger` | Errors, P1 priority |
-| `--role-<role>` | Agent role dots (Product Owner, Scrum Master, ...) |
+| `--accent` `#171717` | Primary buttons, current phase, "Done" badge (white in dark mode) |
+| `--status-todo` / `doing` / `testing` / `done` | Board column marker, light grey to black as work advances |
+| Badges | To do and Testing are outlines, In progress is a grey fill, Done is solid, danger is a dashed outline |
+| `--role-<role>` | Agent avatar greys with initials |
 
 Font: Inter (bundled with `@fontsource-variable/inter`, no external requests).
