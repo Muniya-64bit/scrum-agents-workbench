@@ -159,6 +159,25 @@ curl localhost:8000/projects/1/events
 
 To use the real model, set `ANTHROPIC_API_KEY` and `MOCK_LLM=0` in `.env`.
 
+### Local model with Ollama
+No API key or cloud account is needed. Install [Ollama](https://ollama.com), pull a model and set
+these in `.env`:
+```bash
+ollama pull qwen2.5:14b      # about 9 GB; use qwen2.5:7b on a smaller GPU
+```
+```
+MOCK_LLM=0
+LLM_PROVIDER=ollama
+WORKBENCH_MODEL=qwen2.5:14b
+LLM_PRICE_INPUT_PER_MTOK=0
+LLM_PRICE_OUTPUT_PER_MTOK=0
+```
+The client sends each agent's JSON schema to Ollama as `format`, so the model can only answer in
+the shape the agent expects. Calls are slow compared with the Claude API; a run takes minutes per
+phase. Models under about 7B parameters often fail the schemas. Use `make run`, which reloads only
+when `workbench/` changes. Plain `uvicorn --reload` also watches `workspaces/`, where the agents
+write code, and restarts the API in the middle of a phase.
+
 ### Web UI
 Requires Node.js 22. Keep `make run` going in one terminal, then in another:
 ```bash
@@ -180,6 +199,8 @@ Set in `.env` (copy from `.env.example`).
 | `LLM_MODE` | from `MOCK_LLM` | `mock`, `live`, `record` or `replay` ([docs/development.md](docs/development.md#llm-modes)) |
 | `LLM_SCENARIO_DIR`, `LLM_REPLAY_FALLBACK` | empty, `error` | Scenario folder for record/replay; `mock` uses the mock answer when a recording is missing |
 | `DEFAULT_CAPACITY`, `DEFAULT_MAX_FIX_RETRIES`, `MAX_SPRINTS` | `10`, `3`, `3` | First sprint's points, Developer attempts per bug, sprints before the project ends |
+| `LLM_PROVIDER` | `anthropic` | Live backend: `anthropic` or `ollama` (local) |
+| `OLLAMA_URL`, `OLLAMA_NUM_CTX`, `OLLAMA_TIMEOUT` | `http://localhost:11434`, `16384`, `1800` | Ollama server, context window in tokens, seconds per answer |
 | `LLM_PRICE_INPUT_PER_MTOK`, `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0`, `10.0` | USD per million tokens for the cost estimate |
 | `DATABASE_URL` | `sqlite:///./workbench.db` | Database connection string |
 | `WORKSPACES_DIR` | `./workspaces` | Where generated project code is written |

@@ -20,6 +20,9 @@ describe("describeEvent", () => {
     [ev("task_updated", "Build API -> done"), "Moved “Build API” to Done", "done"],
     [ev("artifact_created", "app.py", { artifact_kind: "api_spec" }), "Wrote api spec “app.py”", "neutral"],
     [ev("bug_reported", "500 on save"), "Reported a bug: 500 on save", "danger"],
+    [ev("file_rejected", "/tests/x.py"), "Rejected a file with an unsafe or disallowed path: /tests/x.py", "danger"],
+    [ev("tests_missing", "No valid tests for story #12"), "No valid tests for story #12: QA wrote no usable test file", "danger"],
+    [ev("docker_build_failed", "permission denied\nsecond line"), "The Docker image could not be built: permission denied", "danger"],
     [ev("code_committed", "Story #3: Add"), "Code committed: Story #3: Add", "neutral"],
     [ev("nfrs_set", "2 non-functional requirement(s)"), "Wrote 2 non-functional requirement(s)", "neutral"],
     [

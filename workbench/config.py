@@ -6,6 +6,7 @@ load_dotenv()
 
 LLM_MODES = ("mock", "live", "record", "replay")
 LLM_FALLBACKS = ("error", "mock")
+LLM_PROVIDERS = ("anthropic", "ollama")
 
 
 def _choice(name: str, value: str, allowed: tuple[str, ...]) -> str:
@@ -22,6 +23,11 @@ MOCK_LLM = LLM_MODE in ("mock", "replay")
 LLM_SCENARIO_DIR = os.getenv("LLM_SCENARIO_DIR", "")
 LLM_REPLAY_FALLBACK = _choice("LLM_REPLAY_FALLBACK", os.getenv("LLM_REPLAY_FALLBACK", "error"),
                               LLM_FALLBACKS)
+# Which backend answers live calls: the Claude API, or a local Ollama server (no API key needed)
+LLM_PROVIDER = _choice("LLM_PROVIDER", os.getenv("LLM_PROVIDER", "anthropic"), LLM_PROVIDERS)
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "1800"))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./workbench.db")
 WORKSPACES_DIR = os.getenv("WORKSPACES_DIR", "./workspaces")
 DEFAULT_MAX_FIX_RETRIES = int(os.getenv("DEFAULT_MAX_FIX_RETRIES", "3"))

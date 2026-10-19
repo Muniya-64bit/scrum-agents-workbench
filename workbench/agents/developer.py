@@ -29,7 +29,7 @@ from workbench.db import repo
 from workbench.llm.client import LLMClient
 from workbench.process import effective_process, fix_retry_limit
 from workbench.schemas import CodeOutput
-from workbench.workspace import UnsafePath, Workspace
+from workbench.workspace import UnsafePath, Workspace, repo_path
 
 MAX_FIX_RETRIES = 3  # default when neither the task nor the sprint's process sets a limit
 ARCHITECTURE_CHARS = 4000  # how much of the architecture overview goes into the prompt
@@ -40,11 +40,15 @@ in the project's code base.
 
 Rules:
 - Return the FULL content of every file you create or change in `files`, with paths relative to
-  the repository root using forward slashes. Leave out files you do not change.
+  the repository root using forward slashes and NO leading slash (app/main.py, not
+  /app/main.py). Leave out files you do not change.
 - Follow the existing architecture and code. If there is no code yet, build a small Python
   FastAPI app: the FastAPI object `app` in app/main.py, dependencies in requirements.txt, data
   kept in SQLite or in memory.
 - Satisfy every acceptance criterion. Validate input and return clear HTTP errors.
+- Read POST and PUT data from a JSON body declared as a pydantic model, never as bare function
+  parameters (FastAPI reads those from the query string). Return 201 for a create and 404 for
+  an unknown id. Import every module you use.
 - If bugs are listed, fix them first without breaking existing behaviour.
 - Do not write tests; QA writes them in tests/. Keep the code small and readable.
 - summary is one sentence describing what you changed."""
@@ -208,7 +212,7 @@ class DeveloperAgent(BaseAgent):
         changed: dict[str, str] = {}
         for f in out.files:
             try:
-                path = ws.resolve(f.path).relative_to(ws.path).as_posix()
+                path = ws.resolve(repo_path(f.path)).relative_to(ws.path).as_posix()
                 if ws.write(path, f.content):
                     changed[path] = f.content
             except UnsafePath:

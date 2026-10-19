@@ -173,6 +173,16 @@ def test_rejects_files_outside_tests_dir(db: Session, project: m.Project, coded:
     assert "evil" not in Workspace(project.id).read("app/main.py")
 
 
+def test_test_file_with_a_leading_slash_is_accepted(db: Session, project: m.Project,
+                                                    coded: m.UserStory, monkeypatch):
+    """Local models often write `/tests/...`; that means the repository root, not a bad path."""
+    reply = _tests_reply(coded, "x")
+    reply["files"][0]["path"] = "/" + reply["files"][0]["path"]
+    QAAgent(_fake_llm(monkeypatch, reply)).run(db, project.id, EXECUTION)
+    assert "file_rejected" not in _kinds(db, project.id)
+    assert Workspace(project.id).files()
+
+
 # --- bugs and the Developer retry loop -----------------------------------------------------
 
 

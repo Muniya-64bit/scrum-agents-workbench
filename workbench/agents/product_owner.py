@@ -15,11 +15,15 @@ Turn the product idea into a small, realistic product backlog.
 
 Rules:
 - Write a one or two sentence product vision.
-- Group work into 2 to 4 epics, each with 2 to 4 user stories (6 to 10 stories in total).
+- Group work into 2 to 4 epics, each with a one-sentence description and 2 to 4 user stories
+  (6 to 10 stories in total).
 - Each story has as_a, i_want and so_that fields, which together read as
   "As a <role>, I want <goal>, so that <benefit>".
-- Each story has 2 to 4 acceptance criteria. Every criterion is ONE string in the form
-  "Given <context> When <action> Then <observable result>" and is testable.
+- Each story has 2 to 4 acceptance criteria, never just one: the main flow, and at least one
+  error or edge case (invalid input, missing item, limit reached). Every criterion is ONE string
+  in the form "Given <context> When <action> Then <observable result>" and is testable.
+- Name the data a story uses (fields, limits, status codes where they matter), so a developer
+  can build it and a tester can check it without asking.
 - priority is 1 (highest) to 5 (lowest). Put the stories needed for a first working version at
   priority 1 or 2.
 - points is a relative size estimate (1, 2, 3, 5, 8 or 13). Split anything larger than 8.
@@ -73,6 +77,8 @@ class ProductOwnerAgent(BaseAgent):
                             "acceptance_criteria": [
                                 "Given an open item When I mark it done "
                                 "Then it is shown as completed",
+                                "Given an item that does not exist When I mark it done "
+                                "Then I see a not-found error",
                             ],
                             "priority": 2,
                             "points": 2,

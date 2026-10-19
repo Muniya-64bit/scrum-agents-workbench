@@ -4,6 +4,8 @@ and record/replay of answers keyed by meaning."""
 import hashlib
 import json
 import re
+import urllib.error
+import urllib.request
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -178,7 +180,10 @@ class LLMClient:
         last_err = ""
         for _ in range(self.max_retries + 1):
             retry = f"\n\nPrevious attempt invalid: {last_err}" if last_err else ""
-            text = self._call(system, prompt + retry, stats)
+            if config.LLM_PROVIDER == "ollama":
+                text = self._call_ollama(system, prompt + retry, stats, schema)
+            else:
+                text = self._call(system, prompt + retry, stats)
             try:
                 return schema.model_validate_json(_extract_json(text))
             except (ValidationError, ValueError) as e:
@@ -201,6 +206,30 @@ class LLMClient:
         stats["input_tokens"] += r.usage.input_tokens
         stats["output_tokens"] += r.usage.output_tokens
         return "".join(b.text for b in r.content if b.type == "text")
+
+    def _call_ollama(self, system: str, prompt: str, stats: dict, schema: type[BaseModel]) -> str:
+        """One chat call to a local Ollama server. `format` is the JSON schema, so Ollama only
+        produces tokens that fit it and the answer is almost always valid JSON."""
+        body = json.dumps({
+            "model": config.MODEL,
+            "stream": False,
+            "format": schema.model_json_schema(),
+            "options": {"num_ctx": config.OLLAMA_NUM_CTX, "num_predict": 8000, "temperature": 0.2},
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": prompt}],
+        }).encode()
+        request = urllib.request.Request(f"{config.OLLAMA_URL}/api/chat", data=body,
+                                         headers={"content-type": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=config.OLLAMA_TIMEOUT) as response:
+                data = json.load(response)
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            raise LLMError(f"Ollama call to {config.OLLAMA_URL} failed ({config.MODEL}): {e}") \
+                from e
+        stats["calls"] += 1
+        stats["input_tokens"] += int(data.get("prompt_eval_count") or 0)
+        stats["output_tokens"] += int(data.get("eval_count") or 0)
+        return (data.get("message") or {}).get("content", "")
 
 
 def _prompt_hash(system: str, user: str) -> str:

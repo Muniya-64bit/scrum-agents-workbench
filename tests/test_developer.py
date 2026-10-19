@@ -136,13 +136,20 @@ def test_unchanged_output_is_a_failed_fix_attempt(db: Session, project: m.Projec
 
 
 def test_unsafe_paths_are_rejected(db: Session, project: m.Project, monkeypatch, tmp_path):
-    bad = ["../escape.py", "/etc/evil", ".git/config", "C:/win.py", "a/../../b.py"]
+    bad = ["../escape.py", ".git/config", "C:/win.py", "a/../../b.py"]
     files = [{"path": p, "content": "x"} for p in bad] + [{"path": "app\\ok.py", "content": "ok"}]
     DeveloperAgent(_fake_llm(monkeypatch, {"files": files})).run(db, project.id, EXECUTION)
     ws = Workspace(project.id)
     assert ws.files() == ["app/ok.py"]
     assert not (ws.path.parent / "escape.py").exists()
     assert _kinds(db, project.id).count("file_rejected") == len(bad)
+
+
+def test_leading_slash_path_is_read_as_repo_relative(db: Session, project: m.Project, monkeypatch):
+    files = [{"path": "/app/main.py", "content": "ok"}]
+    DeveloperAgent(_fake_llm(monkeypatch, {"files": files})).run(db, project.id, EXECUTION)
+    assert Workspace(project.id).files() == ["app/main.py"]
+    assert "file_rejected" not in _kinds(db, project.id)
 
 
 def test_story_id_task_builds_that_story_only(db: Session, project: m.Project):

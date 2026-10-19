@@ -37,7 +37,7 @@ class DemoPO(BaseAgent):
     def mock_output(self, db, project_id, task):
         return {"vision": "v", "epics": [{"title": "E", "stories": [
             {"title": "S", "as_a": "u", "i_want": "x", "so_that": "y",
-             "acceptance_criteria": ["Given a When b Then c"]}]}]}
+             "acceptance_criteria": ["Given a When b Then c", "Given d When e Then f"]}]}]}
 
     def apply(self, tools: Tools, out: BaseModel, task):
         for ep in out.epics:

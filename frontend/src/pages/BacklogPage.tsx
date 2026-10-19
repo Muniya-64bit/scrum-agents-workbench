@@ -1,16 +1,18 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 import { api } from "../api/client";
 import type { BacklogQuality, Nfr, Story } from "../api/types";
 import { IconList } from "../components/icons";
 import { ProcessChips } from "../components/ProcessChips";
-import { Badge, EmptyState, ErrorState, Loading, type Tone } from "../components/ui";
+import { Badge, Button, EmptyState, ErrorState, Loading, type Tone } from "../components/ui";
 import { useResource } from "../lib/useResource";
 import { useProject } from "./ProjectLayout";
 
 export function BacklogPage() {
   const { project, version, process } = useProject();
   const backlog = useResource(() => api.backlog(project.id), [project.id, version]);
+  // Stories start expanded so their criteria are visible; the key remounts the rows on toggle
+  const [expanded, setExpanded] = useState(true);
 
   if (backlog.error) return <ErrorState error={backlog.error} onRetry={backlog.reload} />;
   if (!backlog.data) return <Loading label="Loading backlog" />;
@@ -50,6 +52,12 @@ export function BacklogPage() {
       {nfrs.length > 0 && <NfrPanel nfrs={nfrs} />}
       {quality && <QualityPanel quality={quality} />}
 
+      <div className="backlog-toolbar">
+        <Button onClick={() => setExpanded((open) => !open)}>
+          {expanded ? "Collapse all stories" : "Expand all stories"}
+        </Button>
+      </div>
+
       {epics.map((epic) => (
         <section key={epic.id} className="panel epic" aria-labelledby={`epic-${epic.id}`}>
           <header className="epic-header">
@@ -68,7 +76,7 @@ export function BacklogPage() {
           ) : (
             <ul className="story-list">
               {epic.stories.map((s) => (
-                <StoryRow key={s.id} story={s} />
+                <StoryRow key={`${s.id}-${expanded}`} story={s} open={expanded} />
               ))}
             </ul>
           )}
@@ -148,10 +156,11 @@ function QualityPanel({ quality }: { quality: BacklogQuality }) {
 
 const PRIORITY_TONE: Record<number, Tone> = { 1: "danger", 2: "testing", 3: "accent" };
 
-function StoryRow({ story }: { story: Story }) {
+function StoryRow({ story, open }: { story: Story; open: boolean }) {
+  const criteria = story.acceptance_criteria.length;
   return (
     <li className="story">
-      <details>
+      <details open={open}>
         <summary className="story-summary">
           <span className="story-id">#{story.id}</span>
           <span className="story-title">{story.title}</span>
@@ -162,6 +171,9 @@ function StoryRow({ story }: { story: Story }) {
             ) : (
               story.sprint_id !== null && <Badge tone="doing">In sprint</Badge>
             )}
+            <span className="muted" title="Acceptance criteria">
+              {criteria} {criteria === 1 ? "criterion" : "criteria"}
+            </span>
             <span className="points" title="Story points">
               {story.points} pt
             </span>

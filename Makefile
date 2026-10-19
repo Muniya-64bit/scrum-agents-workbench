@@ -7,7 +7,7 @@ setup:
 	test -f .env || cp .env.example .env
 
 run:
-	$(PY) -m uvicorn workbench.api.main:app --reload --port 8000
+	$(PY) -m uvicorn workbench.api.main:app --reload --reload-dir workbench --port 8000
 
 test:
 	$(PY) -m pytest -q
