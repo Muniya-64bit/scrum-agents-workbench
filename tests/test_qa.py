@@ -3,7 +3,7 @@ import json
 import pytest
 from sqlalchemy.orm import Session
 
-from workbench import runner
+from workbench import config, contract, runner
 from workbench.agents.developer import MAX_FIX_RETRIES, DeveloperAgent
 from workbench.agents.qa import QAAgent
 from workbench.agents.registry import AGENTS
@@ -12,6 +12,7 @@ from workbench.db import models as m
 from workbench.db import repo
 from workbench.llm.client import LLMClient
 from workbench.orchestrator.engine import Orchestrator, Phase
+from workbench.schemas import EndpointOut
 from workbench.workspace import Workspace
 
 EXECUTION = {"name": "execution", "phase": "execution"}
@@ -48,7 +49,12 @@ def _kinds(db: Session, project_id: int) -> list[str]:
 def _fake_llm(monkeypatch, *replies: dict) -> LLMClient:
     llm = LLMClient(mock=False, use_cache=False)
     it = iter(json.dumps(r) for r in replies)
-    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: next(it))
+
+    def call(system, prompt, stats):
+        llm.last_prompt = prompt
+        return next(it)
+
+    monkeypatch.setattr(llm, "_call", call)
     return llm
 
 
@@ -181,6 +187,94 @@ def test_test_file_with_a_leading_slash_is_accepted(db: Session, project: m.Proj
     QAAgent(_fake_llm(monkeypatch, reply)).run(db, project.id, EXECUTION)
     assert "file_rejected" not in _kinds(db, project.id)
     assert Workspace(project.id).files()
+
+
+# --- broken tests and the API contract -----------------------------------------------------
+
+
+def _broken_tests(story: m.UserStory) -> dict:
+    """Tests with a mistake of their own: `datetime` is never imported."""
+    return {"summary": "tests", "files": [{
+        "path": f"tests/test_story_{story.id}.py",
+        "content": "def test_today():\n    assert datetime.date.today()\n"}]}
+
+
+def test_broken_tests_are_rewritten_by_qa_and_file_no_bug(db: Session, project: m.Project,
+                                                          coded: m.UserStory, monkeypatch):
+    llm = _fake_llm(monkeypatch, _broken_tests(coded), _tests_reply(coded, "Create an item"))
+    QAAgent(llm, developer=DeveloperAgent()).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "tests_revised" in kinds and "bug_reported" not in kinds
+    assert [e.payload["ok"] for e in repo.events_since(db, project.id)
+            if e.kind == "test_run"] == [False, True]
+    prompt = llm.last_prompt
+    assert "mistake in the test code itself" in prompt and "NameError" in prompt
+
+
+def test_an_error_in_the_application_goes_to_the_developer_not_to_a_test_rewrite(
+        db: Session, project: m.Project, coded: m.UserStory, monkeypatch):
+    """A NameError raised from app/ code (not from tests/) is the Developer's bug."""
+    Workspace(project.id).write(f"app/features/story_{coded.id}.py", "value = undefined_name\n")
+    developer = DeveloperAgent(_fake_llm(monkeypatch, _fix_reply(coded, "Create an item")))
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "Create an item"))
+    QAAgent(qa_llm, developer=developer).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "tests_revised" not in kinds and "bug_fixed" in kinds
+    (bug,) = repo.bugs(db, project.id)
+    assert "NameError" in bug.description  # the real reason reaches the Developer
+
+
+def test_a_syntax_error_in_app_code_is_the_developers_bug(
+        db: Session, project: m.Project, coded: m.UserStory, monkeypatch):
+    """pytest shows a syntax error with the file's full path, not as an `app/x.py:3` frame."""
+    Workspace(project.id).write(f"app/features/story_{coded.id}.py", "def f(a=1, b):\n    pass\n")
+    developer = DeveloperAgent(_fake_llm(monkeypatch, _fix_reply(coded, "Create an item")))
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "Create an item"))
+    QAAgent(qa_llm, developer=developer).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "tests_revised" not in kinds and "tests_revision_unchanged" not in kinds
+    (bug,) = repo.bugs(db, project.id)
+    assert "SyntaxError" in bug.description
+
+
+def test_an_unchanged_rewrite_stops_the_loop(db: Session, project: m.Project,
+                                             coded: m.UserStory, monkeypatch):
+    llm = _fake_llm(monkeypatch, _broken_tests(coded), _broken_tests(coded))
+    QAAgent(llm, developer=DeveloperAgent()).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "tests_revision_unchanged" in kinds and "tests_revised" not in kinds
+    assert kinds.count("test_run") == 1  # no further attempts with the same tests
+
+
+def _add_contract(db: Session, project: m.Project, story: m.UserStory, path: str) -> None:
+    spec = contract.render([EndpointOut(method="POST", path=path, purpose="Add",
+                                        success_status=201)])
+    Tools(db, project.id, "architect").write_artifact("api_spec", f"API: {story.title}", spec,
+                                                      story_id=story.id)
+
+
+def test_missing_contract_endpoint_is_filed_as_a_bug(db: Session, project: m.Project,
+                                                     coded: m.UserStory, monkeypatch):
+    monkeypatch.setattr(config, "MOCK_LLM", False)  # the check is for live runs
+    _add_contract(db, project, coded, "/books")
+    QAAgent().run(db, project.id, EXECUTION)
+    bugs = db.query(m.Bug).filter_by(story_id=coded.id).all()
+    assert [b.description for b in bugs] == ["contract POST /books: endpoint is missing"]
+    assert not [t for t in coded.tasks if t.assignee == "qa" and t.status == "done"]
+
+
+def test_implemented_contract_endpoint_passes(db: Session, project: m.Project,
+                                              coded: m.UserStory, monkeypatch):
+    monkeypatch.setattr(config, "MOCK_LLM", False)
+    _add_contract(db, project, coded, "/items")  # the mock app has POST /items with 201
+    QAAgent().run(db, project.id, EXECUTION)
+    assert db.query(m.Bug).filter_by(story_id=coded.id).count() == 0
+
+
+def test_qa_prompt_carries_the_contract(db: Session, project: m.Project, coded: m.UserStory):
+    _add_contract(db, project, coded, "/books")
+    prompt = QAAgent().build_prompt(db, project.id, {**EXECUTION, "story_id": coded.id})
+    assert "API contract from the Architect" in prompt and "/books" in prompt
 
 
 # --- bugs and the Developer retry loop -----------------------------------------------------

@@ -84,3 +84,17 @@ def test_a_story_needs_at_least_two_acceptance_criteria():
     StoryOut(**story, acceptance_criteria=["Given a When b Then c", "Given d When e Then f"])
     with pytest.raises(ValidationError):
         StoryOut(**story, acceptance_criteria=["Given a When b Then c"])
+
+
+def test_a_call_can_use_its_own_model(monkeypatch):
+    seen = _server(monkeypatch, [json.dumps({"summary": "a"}), json.dumps({"summary": "b"})])
+    llm = LLMClient(mock=False, use_cache=False)
+    llm.complete_json("s", "u", Answer, model="qwen2.5-coder:14b")
+    llm.complete_json("s", "u", Answer)  # the override does not leak into the next call
+    assert [r["body"]["model"] for r in seen] == ["qwen2.5-coder:14b", "qwen2.5:14b"]
+
+
+def test_model_for_reads_the_role_setting(monkeypatch):
+    monkeypatch.setenv("WORKBENCH_MODEL_DEVELOPER", "qwen2.5-coder:14b")
+    assert config.model_for("developer") == "qwen2.5-coder:14b"
+    assert config.model_for("qa") == config.MODEL

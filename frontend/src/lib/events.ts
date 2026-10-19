@@ -110,6 +110,10 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
       return { text: `Rejected a file with an unsafe or disallowed path: ${m}`, tone: "danger" };
     case "tests_missing":
       return { text: `${m}: QA wrote no usable test file`, tone: "danger" };
+    case "tests_revised":
+      return { text: `QA rewrote its tests after a mistake in the test code: ${m}`, tone: "accent" };
+    case "tests_revision_unchanged":
+      return { text: `QA's rewrite changed nothing, so it stopped: ${m}`, tone: "testing" };
     case "docker_build_failed":
       return { text: `The Docker image could not be built: ${m.split("\n")[0]}`, tone: "danger" };
     case "code_skipped":

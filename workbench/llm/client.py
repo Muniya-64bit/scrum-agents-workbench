@@ -7,6 +7,7 @@ import re
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -15,6 +16,12 @@ from pydantic import BaseModel, ValidationError
 from workbench import config
 
 CACHE_DIR = Path(".cache/llm")
+# Model of the call in progress (one agent role can use another model than the default)
+_MODEL: ContextVar[str | None] = ContextVar("llm_model", default=None)
+
+
+def _model() -> str:
+    return _MODEL.get() or config.MODEL
 
 
 class LLMError(RuntimeError):
@@ -71,12 +78,14 @@ class LLMClient:
         mock: Callable[[], dict] | None = None,
         usage: dict | None = None,
         key: str | None = None,
+        model: str | None = None,
     ) -> T:
         """Return a validated `schema` instance. In mock mode `mock()` supplies the dict.
 
         Usage (calls, tokens, cache hits, invalid outputs) is added to `self.usage` and, when
         given, to `usage`, also when the call ends in an error. `key` names the call by meaning
-        (see `BaseAgent.llm_key`); record and replay need it. Replay flags (`replayed`,
+        (see `BaseAgent.llm_key`); record and replay need it. `model` overrides the configured
+        model for this call. Replay flags (`replayed`,
         `replay_drift`, `replay_fallback`, `replay_n`) are set in `usage` only."""
         if self.mode == "mock":
             if mock is None:
@@ -84,6 +93,7 @@ class LLMClient:
             return schema.model_validate(mock())
 
         stats: dict = dict.fromkeys(USAGE_KEYS, 0)
+        token = _MODEL.set(model)
         try:
             if self.mode == "replay":
                 return self._replay(system, user, schema, mock, stats, key)
@@ -91,6 +101,7 @@ class LLMClient:
                 return self._record(system, user, schema, mock, stats, key)
             return self._complete_live(system, user, schema, stats, mock)
         finally:
+            _MODEL.reset(token)
             for k, v in stats.items():
                 if k in FLAG_KEYS:
                     if usage is not None:
@@ -122,7 +133,7 @@ class LLMClient:
             "output": obj.model_dump(mode="json"),
             "usage": {"input_tokens": stats["input_tokens"] - tokens_in,
                       "output_tokens": stats["output_tokens"] - tokens_out},
-            "source": "recorded", "model": config.MODEL,
+            "source": "recorded", "model": _model(),
             "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,7 +168,7 @@ class LLMClient:
 
     def _complete_live[T: BaseModel](self, system: str, user: str, schema: type[T], stats: dict,
                                      mock: Callable[[], dict] | None = None) -> T:
-        raw = f"{config.MODEL}|{system}|{user}|{schema.__name__}"
+        raw = f"{_model()}|{system}|{user}|{schema.__name__}"
         key = hashlib.sha256(raw.encode()).hexdigest()
         cached = CACHE_DIR / f"{key}.json"
         if self.use_cache and cached.exists():
@@ -197,7 +208,7 @@ class LLMClient:
 
             self._client = anthropic.Anthropic()
         r = self._client.messages.create(
-            model=config.MODEL,
+            model=_model(),
             max_tokens=8000,
             system=system,
             messages=[{"role": "user", "content": prompt}],
@@ -211,7 +222,7 @@ class LLMClient:
         """One chat call to a local Ollama server. `format` is the JSON schema, so Ollama only
         produces tokens that fit it and the answer is almost always valid JSON."""
         body = json.dumps({
-            "model": config.MODEL,
+            "model": _model(),
             "stream": False,
             "format": schema.model_json_schema(),
             "options": {"num_ctx": config.OLLAMA_NUM_CTX, "num_predict": 8000, "temperature": 0.2},
@@ -224,7 +235,7 @@ class LLMClient:
             with urllib.request.urlopen(request, timeout=config.OLLAMA_TIMEOUT) as response:
                 data = json.load(response)
         except (urllib.error.URLError, TimeoutError, ValueError) as e:
-            raise LLMError(f"Ollama call to {config.OLLAMA_URL} failed ({config.MODEL}): {e}") \
+            raise LLMError(f"Ollama call to {config.OLLAMA_URL} failed ({_model()}): {e}") \
                 from e
         stats["calls"] += 1
         stats["input_tokens"] += int(data.get("prompt_eval_count") or 0)

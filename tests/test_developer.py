@@ -3,6 +3,7 @@ import json
 import pytest
 from sqlalchemy.orm import Session
 
+from workbench import contract
 from workbench.agents.developer import MAX_FIX_RETRIES, DeveloperAgent
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
@@ -10,6 +11,7 @@ from workbench.db import models as m
 from workbench.db import repo
 from workbench.llm.client import LLMClient
 from workbench.orchestrator.engine import Orchestrator
+from workbench.schemas import EndpointOut
 from workbench.workspace import UnsafePath, Workspace
 
 EXECUTION = {"name": "execution", "phase": "execution"}
@@ -150,6 +152,27 @@ def test_leading_slash_path_is_read_as_repo_relative(db: Session, project: m.Pro
     DeveloperAgent(_fake_llm(monkeypatch, {"files": files})).run(db, project.id, EXECUTION)
     assert Workspace(project.id).files() == ["app/main.py"]
     assert "file_rejected" not in _kinds(db, project.id)
+
+
+def test_prompt_carries_the_architects_api_contract(db: Session, project: m.Project):
+    story = _story(db, project)
+    spec = contract.render([EndpointOut(method="POST", path="/items", purpose="Add",
+                                        request_fields=["title: str"], success_status=201)])
+    Tools(db, project.id, "architect").write_artifact(
+        "api_spec", "API: Create an item", spec, story_id=story.id)
+    prompt = DeveloperAgent().build_prompt(db, project.id, {**EXECUTION, "story_id": story.id})
+    assert "API contract from the Architect" in prompt and "'201':" in prompt
+
+
+def test_prompt_skips_binary_files_the_app_created(db: Session, project: m.Project):
+    """Running the generated app's tests can leave a SQLite file in the workspace."""
+    ws = Workspace(project.id).init()
+    (ws.path / "library.db").write_bytes(b"SQLite format 3\x00\x89\xff\xfe")
+    ws.write("app/main.py", "x = 1\n")
+    prompt = DeveloperAgent().build_prompt(db, project.id,
+                                           {**EXECUTION, "story_id": _story(db, project).id})
+    assert "=== app/main.py ===" in prompt and "library.db" not in prompt
+    assert ws.files() == ["app/main.py", "library.db"] and ws.text_files() == ["app/main.py"]
 
 
 def test_story_id_task_builds_that_story_only(db: Session, project: m.Project):

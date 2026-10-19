@@ -127,11 +127,33 @@ class ArchitectureOutput(AgentOutput):  # Architect, sprint 0
     api_spec: str = Field(description="OpenAPI 3 YAML")
 
 
+class EndpointOut(BaseModel):
+    """One HTTP endpoint of the API contract: what the Developer must build and QA must test."""
+
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+    path: str = Field(description="Starts with /, path parameters in braces: /books/{book_id}")
+    purpose: str = Field(description="One short sentence")
+    request_fields: list[str] = Field(
+        [], description="JSON body fields as 'name: type', e.g. 'title: str'; empty when none")
+    success_status: int = Field(200, ge=200, le=299, description="201 for a create")
+    error_statuses: list[int] = Field(
+        [], description="Error codes it can return, e.g. 404 unknown id, 409 conflict, 422 input")
+
+    @field_validator("path")
+    @classmethod
+    def _path(cls, v: str) -> str:
+        v = v.strip()
+        if not v.startswith("/") or " " in v:
+            raise ValueError("path must start with / and contain no spaces")
+        return v
+
+
 class StoryDesignOut(BaseModel):
     story_id: int
     notes: str = Field(description="Markdown: what changes in the design for this story")
     diagram: str = Field("", description="Optional Mermaid diagram, no ``` fences")
-    api_spec: str = Field("", description="Optional OpenAPI 3 YAML snippet (paths only)")
+    endpoints: list[EndpointOut] = Field(
+        min_length=1, description="The API contract: every endpoint this story needs")
 
     @field_validator("diagram")
     @classmethod
