@@ -3,10 +3,11 @@ import { Link, Outlet, useOutletContext, useParams } from "react-router-dom";
 
 import { ApiError, api } from "../api/client";
 import type { ActivityEvent, ProcessInfo, Project } from "../api/types";
+import { ApprovalCard } from "../components/ApprovalCard";
 import { Avatar } from "../components/Avatar";
 import { PhaseBar } from "../components/PhaseBar";
 import { useToast } from "../components/Toast";
-import { IconArrowRight, IconCheck, IconChevronLeft, IconFolder, IconX } from "../components/icons";
+import { IconArrowRight, IconCheck, IconChevronLeft, IconFolder } from "../components/icons";
 import { Badge, Button, EmptyState, ErrorState, Loading } from "../components/ui";
 import { PHASE_EVENTS, actorLabel, describeEvent } from "../lib/events";
 import { notifyProjectsChanged } from "../lib/projectsChanged";
@@ -103,6 +104,11 @@ export function ProjectLayout() {
           sprintNumber={processRes.data?.current_sprint_number ?? null}
         />
       </header>
+      {project.awaiting_approval && (
+        <div className="page-body approval-slot">
+          <ApprovalCard project={project} onDone={onChange} />
+        </div>
+      )}
       <Outlet
         context={
           {
@@ -162,21 +168,13 @@ function PhaseActions({
       <div className="phase-actions">
         <Badge tone="testing">Awaiting your approval: {phaseLabel(project.phase)}</Badge>
         <Button
-          icon={<IconX />}
-          loading={busy === "reject"}
-          disabled={busy !== null}
-          onClick={() => run("reject")}
-        >
-          Reject
-        </Button>
-        <Button
           variant="primary"
-          icon={<IconCheck />}
-          loading={busy === "approve"}
-          disabled={busy !== null}
-          onClick={() => run("approve")}
+          icon={<IconArrowRight />}
+          onClick={() =>
+            document.getElementById("approval")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
         >
-          Approve
+          Review and decide
         </Button>
       </div>
     );

@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 
 import { api } from "../api/client";
 import type { BacklogQuality, Nfr, Story } from "../api/types";
+import { Gherkin } from "../components/Gherkin";
 import { IconList } from "../components/icons";
 import { ProcessChips } from "../components/ProcessChips";
 import { Badge, Button, EmptyState, ErrorState, Loading, type Tone } from "../components/ui";
@@ -201,23 +202,5 @@ function StoryRow({ story, open }: { story: Story; open: boolean }) {
         </div>
       </details>
     </li>
-  );
-}
-
-/** Bold the Given / When / Then / And keywords so criteria are easy to scan. */
-function Gherkin({ text }: { text: string }) {
-  const parts = text.split(/\b(Given|When|Then|And)\b/);
-  return (
-    <>
-      {parts.map((part, i) =>
-        /^(Given|When|Then|And)$/.test(part) ? (
-          <strong key={i} className="gherkin">
-            {part}
-          </strong>
-        ) : (
-          part
-        ),
-      )}
-    </>
   );
 }

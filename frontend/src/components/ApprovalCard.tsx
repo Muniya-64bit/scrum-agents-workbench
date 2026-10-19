@@ -3,11 +3,12 @@ import { Link } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { Project, SprintDetail } from "../api/types";
-import { phaseLabel } from "../lib/scrum";
+import { phaseLabel, statusLabel } from "../lib/scrum";
 import { useResource } from "../lib/useResource";
 import { useToast } from "./Toast";
 import { IconCheck, IconX } from "./icons";
-import { Badge, Button, Spinner } from "./ui";
+import { Gherkin } from "./Gherkin";
+import { Badge, Button, RoleTag, Spinner } from "./ui";
 
 const GATE_TEXT: Record<string, string> = {
   sprint_planning:
@@ -58,7 +59,11 @@ export function ApprovalCard({
 
   const titleId = `approval-${project.id}`;
   return (
-    <section className="panel approval" aria-labelledby={titleId}>
+    <section
+      className="panel approval"
+      aria-labelledby={titleId}
+      id={showProject ? undefined : "approval"}
+    >
       <header className="approval-header">
         <div>
           <Badge tone="testing">Needs your approval</Badge>
@@ -155,14 +160,62 @@ function SprintSummary({
         {data.capacity} points · {phase === "review" ? `${done} of ${data.tasks.length} tasks done` : `${data.tasks.length} tasks`}
       </p>
       {data.stories.length > 0 && (
-        <ul className="approval-stories">
-          {data.stories.map((s) => (
-            <li key={s.id}>
-              <span className="story-id">#{s.id}</span> {s.title}
-              <span className="points">{s.points} pt</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <h3 className="approval-subtitle">
+            {phase === "review" ? "What was built" : "What you are accepting"}
+          </h3>
+          <ul className="approval-stories">
+            {data.stories.map((s) => {
+              const tasks = data.tasks.filter((t) => t.story_id === s.id);
+              return (
+                <li key={s.id}>
+                  <details open className="approval-story">
+                    <summary className="approval-story-summary">
+                      <span className="story-id">#{s.id}</span>
+                      <span className="story-title">{s.title}</span>
+                      <Badge tone="neutral">P{s.priority}</Badge>
+                      <span className="points">{s.points} pt</span>
+                    </summary>
+                    <div className="approval-story-body">
+                      <p className="user-story">
+                        As a <strong>{s.as_a || "user"}</strong>, I want {s.i_want || "…"}
+                        {s.so_that && <>, so that {s.so_that}</>}.
+                      </p>
+                      <h4 className="criteria-title">Acceptance criteria</h4>
+                      {s.acceptance_criteria.length === 0 ? (
+                        <p className="muted">None written.</p>
+                      ) : (
+                        <ul className="criteria">
+                          {s.acceptance_criteria.map((c, i) => (
+                            <li key={i}>
+                              <Gherkin text={c} />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {tasks.length > 0 && (
+                        <>
+                          <h4 className="criteria-title">Tasks</h4>
+                          <ul className="approval-tasks">
+                            {tasks.map((t) => (
+                              <li key={t.id}>
+                                <span>{t.title}</span>
+                                <RoleTag role={t.assignee} />
+                                <Badge tone={t.status === "done" ? "done" : "todo"}>
+                                  {statusLabel(t.status)}
+                                </Badge>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );
