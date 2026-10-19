@@ -320,11 +320,12 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 34px;
-  padding: 0 14px;
+  height: 36px;
+  padding: 0 16px;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  font-weight: 550;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.15s,
@@ -350,6 +351,7 @@ textarea {
   border-color: var(--border-strong);
   background: var(--surface);
   color: var(--text);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -366,9 +368,16 @@ textarea {
   color: var(--text);
 }
 
+/* Black and white only: a destructive action is an outline with a heavier border */
 .btn-danger {
-  background: var(--danger);
-  color: #fff;
+  border: 2px solid var(--text);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--text);
+  color: var(--surface);
 }
 
 .icon-btn {
@@ -395,9 +404,10 @@ textarea {
   gap: 4px;
   height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -407,33 +417,37 @@ textarea {
 }
 
 .badge-accent {
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text);
 }
 
 .badge-todo {
-  background: var(--status-todo-soft);
-  color: var(--status-todo);
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
 }
 
 .badge-doing {
   background: var(--status-doing-soft);
-  color: var(--status-doing);
+  color: var(--text);
 }
 
 .badge-testing {
-  background: var(--status-testing-soft);
-  color: var(--status-testing);
+  border-color: var(--text);
+  background: transparent;
+  color: var(--text);
 }
 
 .badge-done {
-  background: var(--status-done-soft);
-  color: var(--status-done);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .badge-danger {
-  background: var(--danger-soft);
-  color: var(--danger);
+  border: 1px dashed var(--text);
+  background: transparent;
+  color: var(--text);
 }
 
 .role-tag {
@@ -471,11 +485,15 @@ textarea {
 
 .input {
   width: 100%;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 7px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
-  transition: border-color 0.15s;
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .input::placeholder {
@@ -483,7 +501,9 @@ textarea {
 }
 
 .input:focus {
-  border-color: var(--accent);
+  border-color: var(--text);
+  box-shadow: var(--focus-ring);
+  outline: none;
 }
 
 .textarea {
@@ -596,7 +616,7 @@ textarea {
 }
 
 .btn-primary .spinner {
-  border-color: rgb(255 255 255 / 0.4);
+  border-color: rgb(128 128 128 / 0.5);
   border-top-color: var(--on-accent);
 }
 
@@ -1265,8 +1285,8 @@ details[open] > .story-summary::before {
   min-width: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--status-testing);
-  color: #fff;
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: 11px;
   font-weight: 650;
   line-height: 18px;
@@ -1279,7 +1299,7 @@ details[open] > .story-summary::before {
   place-items: center;
   border-radius: 50%;
   background: var(--avatar, var(--role-devops));
-  color: #fff;
+  color: var(--on-role);
   font-weight: 650;
   letter-spacing: 0.02em;
 }
@@ -1395,13 +1415,13 @@ details[open] > .story-summary::before {
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgb(22 163 74 / 0.5);
+    box-shadow: 0 0 0 0 rgb(128 128 128 / 0.5);
   }
   70% {
-    box-shadow: 0 0 0 7px rgb(22 163 74 / 0);
+    box-shadow: 0 0 0 7px rgb(128 128 128 / 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgb(22 163 74 / 0);
+    box-shadow: 0 0 0 0 rgb(128 128 128 / 0);
   }
 }
 
