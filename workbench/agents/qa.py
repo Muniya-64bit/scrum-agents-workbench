@@ -35,7 +35,7 @@ FILES_CHARS = 12000  # budget for code shown to the LLM
 DESIGN_CHARS = 4000  # per design / API artifact shown when writing tests before the code
 MAX_BUGS_PER_RUN = 5  # one bug per failing test, capped so a broken app does not flood the board
 PYTEST_INI = "[pytest]\ntestpaths = tests\npythonpath = .\n"  # keeps pytest off the parent config
-GITIGNORE = "__pycache__/\n*.pyc\n.pytest_cache/\n"
+GITIGNORE = "__pycache__/\n*.pyc\n.pytest_cache/\n*.db\n*.sqlite3\n"
 
 SYSTEM_PROMPT = """You are a QA engineer on a Scrum team. Write pytest tests for ONE user story.
 
@@ -271,7 +271,7 @@ class QAAgent(BaseAgent):
             return "\n".join(lines)
         lines.append("Code to test:")
         ws, used = self.workspace(project_id), 0
-        for path in ws.files():
+        for path in ws.text_files():
             if path.startswith("tests/") or not path.endswith((".py", ".txt")):
                 continue
             content = ws.read(path)

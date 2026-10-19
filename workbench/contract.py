@@ -96,7 +96,7 @@ def _norm(path: str) -> str:
 def implemented(ws: Workspace) -> list[Endpoint]:
     """The routes declared in the workspace's `app/` Python files (FastAPI decorators)."""
     found: list[Endpoint] = []
-    for rel in ws.files():
+    for rel in ws.text_files():
         if rel.startswith("app/") and rel.endswith(".py"):
             for m in _ROUTE.finditer(ws.read(rel)):
                 status = _STATUS.search(m.group(3))

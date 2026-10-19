@@ -63,6 +63,18 @@ class Workspace:
         return sorted(p.relative_to(self.path).as_posix() for p in self.path.rglob("*")
                       if p.is_file() and ".git" not in p.relative_to(self.path).parts)
 
+    def text_files(self) -> list[str]:
+        """`files()` without the binary ones, such as the SQLite file the app creates when its
+        tests run. Prompts only show text."""
+        found = []
+        for rel in self.files():
+            try:
+                self.read(rel)
+            except UnicodeDecodeError:
+                continue
+            found.append(rel)
+        return found
+
     def commit(self, message: str) -> str | None:
         """Stage everything and commit. Returns the commit sha, or None if nothing changed."""
         self._git("add", "-A")

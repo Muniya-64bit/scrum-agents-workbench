@@ -164,6 +164,17 @@ def test_prompt_carries_the_architects_api_contract(db: Session, project: m.Proj
     assert "API contract from the Architect" in prompt and "'201':" in prompt
 
 
+def test_prompt_skips_binary_files_the_app_created(db: Session, project: m.Project):
+    """Running the generated app's tests can leave a SQLite file in the workspace."""
+    ws = Workspace(project.id).init()
+    (ws.path / "library.db").write_bytes(b"SQLite format 3\x00\x89\xff\xfe")
+    ws.write("app/main.py", "x = 1\n")
+    prompt = DeveloperAgent().build_prompt(db, project.id,
+                                           {**EXECUTION, "story_id": _story(db, project).id})
+    assert "=== app/main.py ===" in prompt and "library.db" not in prompt
+    assert ws.files() == ["app/main.py", "library.db"] and ws.text_files() == ["app/main.py"]
+
+
 def test_story_id_task_builds_that_story_only(db: Session, project: m.Project):
     other = _story(db, project, "Delete an item")  # not in a sprint, but asked for directly
     DeveloperAgent().run(db, project.id, {**EXECUTION, "story_id": other.id})

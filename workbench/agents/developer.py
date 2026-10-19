@@ -176,7 +176,7 @@ class DeveloperAgent(BaseAgent):
 
         lines += ["", "Current files:"]
         ws, used, skipped = self.workspace(project_id), 0, []
-        for path in ws.files():
+        for path in ws.text_files():
             content = ws.read(path)
             if used + len(content) > FILES_CHARS:
                 skipped.append(path)
@@ -185,7 +185,7 @@ class DeveloperAgent(BaseAgent):
             lines += [f"=== {path} ===", content]
         if skipped:
             lines.append("Not shown (too large): " + ", ".join(skipped))
-        if not ws.files():
+        if not ws.text_files():
             lines.append("(empty repository)")
         return "\n".join(lines)
 
