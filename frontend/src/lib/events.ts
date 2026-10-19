@@ -106,6 +106,15 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
       return { text: `Moved ${q(m)} back to the backlog for the next sprint`, tone: "testing" };
     case "tests_written_first":
       return { text: `Wrote the tests for story #${e.payload.story_id} before the code`, tone: "accent" };
+    case "file_rejected":
+      return { text: `Rejected a file with an unsafe or disallowed path: ${m}`, tone: "danger" };
+    case "tests_missing":
+      return { text: `${m}: QA wrote no usable test file`, tone: "danger" };
+    case "docker_build_failed":
+      return { text: `The Docker image could not be built: ${m.split("\n")[0]}`, tone: "danger" };
+    case "code_skipped":
+    case "design_skipped":
+      return { text: m, tone: "neutral" };
     case "release_created": {
       const n = Array.isArray(e.payload.story_ids) ? e.payload.story_ids.length : 0;
       return {

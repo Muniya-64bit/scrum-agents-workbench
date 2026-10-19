@@ -31,7 +31,7 @@ def backlog_po(count: int, points: int = 2) -> BaseAgent:
         def mock_output(self, db, project_id, task):
             stories = [{"title": f"Feature {i}", "as_a": "user", "i_want": f"feature {i}",
                         "so_that": "it works", "points": points, "priority": 1,
-                        "acceptance_criteria": ["Given a When b Then c"]}
+                        "acceptance_criteria": ["Given a When b Then c", "Given d When e Then f"]}
                        for i in range(1, count + 1)]
             return {"vision": "v", "epics": [{"title": "Core", "stories": stories}]}
 

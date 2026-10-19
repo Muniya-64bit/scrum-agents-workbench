@@ -17,6 +17,13 @@ class UnsafePath(ValueError):
     pass
 
 
+def repo_path(rel: str) -> str:
+    """Read a path written by a model as relative to the repository root: models often write
+    `/tests/test_x.py`. `Workspace.resolve` still rejects absolute paths; this only maps a
+    leading slash to the repository root before that check."""
+    return rel.replace("\\", "/").strip().lstrip("/")
+
+
 class Workspace:
     def __init__(self, project_id: int, root: str | Path | None = None):
         base = Path(root if root is not None else config.WORKSPACES_DIR).resolve()

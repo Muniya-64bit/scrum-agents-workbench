@@ -6,7 +6,6 @@ import { mockApi, renderApp } from "../test/utils";
 
 describe("BacklogPage", () => {
   it("shows the vision, stats, epics and story details", async () => {
-    const user = userEvent.setup();
     mockApi({ "GET /projects/1": project, "GET /projects/1/backlog": backlog });
     renderApp("/projects/1/backlog");
 
@@ -15,9 +14,22 @@ describe("BacklogPage", () => {
     expect(screen.getByText("No stories in this epic yet.")).toBeInTheDocument();
     expect(screen.getByText("Story points").nextSibling).toHaveTextContent("3");
 
-    await user.click(screen.getByText("Create an item"));
+    // stories are open by default, so the criteria are visible without a click
     expect(screen.getByText(/to add a to-do/)).toBeVisible();
     expect(screen.getByText("Given")).toHaveClass("gherkin");
+    expect(screen.getByText("Create an item").closest("summary")).toHaveTextContent("criteri");
+  });
+
+  it("collapses and expands every story", async () => {
+    const user = userEvent.setup();
+    mockApi({ "GET /projects/1": project, "GET /projects/1/backlog": backlog });
+    renderApp("/projects/1/backlog");
+    await screen.findByText("Create an item");
+
+    await user.click(screen.getByRole("button", { name: "Collapse all stories" }));
+    expect(screen.getByText(/to add a to-do/)).not.toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Expand all stories" }));
+    expect(screen.getByText(/to add a to-do/)).toBeVisible();
   });
 
   it("marks a finished story as Done and a planned one as In sprint", async () => {

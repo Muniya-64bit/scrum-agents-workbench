@@ -28,7 +28,7 @@ from workbench.db import repo
 from workbench.llm.client import LLMClient
 from workbench.process import fix_retry_limit
 from workbench.schemas import CodeOutput
-from workbench.workspace import UnsafePath, Workspace
+from workbench.workspace import UnsafePath, Workspace, repo_path
 
 FILES_CHARS = 12000  # budget for code shown to the LLM
 DESIGN_CHARS = 4000  # per design / API artifact shown when writing tests before the code
@@ -42,7 +42,7 @@ Rules:
 - Write one test per acceptance criterion. Name each test after its criterion, and put the
   Given/When/Then text in a comment or docstring.
 - Put all files under `tests/`, for example `tests/test_story_<id>.py`. Return the FULL file
-  content in `files`, with forward-slash paths.
+  content in `files`, with relative forward-slash paths and NO leading slash.
 - Test the code that exists. For a FastAPI app, use `from fastapi.testclient import TestClient`
   and `from app.main import app`. Keep each test independent of the others.
 - Do not change application code. Do not use the network or sleep.
@@ -263,7 +263,7 @@ class QAAgent(BaseAgent):
         changed: dict[str, str] = {}
         for f in out.files:
             try:
-                path = ws.resolve(f.path).relative_to(ws.path).as_posix()
+                path = ws.resolve(repo_path(f.path)).relative_to(ws.path).as_posix()
             except UnsafePath:
                 tools.log("file_rejected", f.path, story_id=story.id)
                 continue

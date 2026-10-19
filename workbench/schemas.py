@@ -19,14 +19,16 @@ class StoryOut(BaseModel):
     as_a: str
     i_want: str
     so_that: str
-    acceptance_criteria: list[str] = Field(description="Given/When/Then strings")
+    acceptance_criteria: list[str] = Field(
+        min_length=2, description="2 to 4 Given/When/Then strings: the main flow and at least "
+                                  "one error or edge case")
     priority: int = Field(3, ge=1, le=5)
     points: int = Field(1, ge=1, le=13)
 
 
 class EpicOut(BaseModel):
     title: str
-    description: str = ""
+    description: str = Field("", description="One sentence: what this epic delivers")
     stories: list[StoryOut] = []
 
 
