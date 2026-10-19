@@ -88,6 +88,14 @@ def test_design_delta_prompt_uses_existing_architecture(db: Session, project: m.
     assert "Delete an item" not in prompt
 
 
+def test_the_runtime_is_fixed_in_the_prompts():
+    """A live run once chose Node.js and MongoDB, which the sandbox cannot run."""
+    assert "FastAPI" in SystemDesigner.system_prompt and "sqlite3" in SystemDesigner.system_prompt
+    from workbench.agents.developer import SYSTEM_PROMPT
+
+    assert "Only fastapi, pydantic" in SYSTEM_PROMPT
+
+
 def test_design_without_endpoints_is_retried(db: Session, project: m.Project, monkeypatch):
     first = repo.backlog(db, project.id)[0]
     bad = {"designs": [{"story_id": first.id, "notes": "no contract"}]}

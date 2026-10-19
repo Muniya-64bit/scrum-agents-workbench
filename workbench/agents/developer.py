@@ -55,6 +55,8 @@ Rules:
   parameters (FastAPI reads those from the query string). Return 201 for a create and 404 for
   an unknown id. Import every module you use.
 - If bugs are listed, fix them first without breaking existing behaviour.
+- Only fastapi, pydantic, httpx and the Python standard library are installed; use `sqlite3` for
+  storage. Import nothing else, even if the architecture names another stack.
 - Do not write tests; QA writes them in tests/. Keep the code small and readable.
 - summary is one sentence describing what you changed."""
 

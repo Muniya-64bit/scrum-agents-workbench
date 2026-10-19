@@ -49,6 +49,9 @@ class SystemDesigner(BaseAgent):
 Design the simplest architecture that delivers the backlog.
 
 Rules:
+- The runtime is fixed by the platform: a Python 3.12 FastAPI service with pydantic and SQLite
+  through the standard library `sqlite3`. The Tech stack section must name exactly this. Do not
+  choose another language, framework or database (no Node.js, MongoDB, Redis or ORMs).
 - overview is Markdown with sections: Tech stack, Components, Key decisions (each with a reason).
 - diagrams: exactly three, named components, data-model and main-flow.
   components is a Mermaid flowchart, data-model is a Mermaid erDiagram with entity attributes,
