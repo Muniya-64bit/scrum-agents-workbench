@@ -81,6 +81,19 @@ describe("TraceabilityPage", () => {
     expect(screen.getByRole("combobox", { name: "Sprint" })).toHaveValue("2");
   });
 
+  it("lists a carried-over story under every sprint it was planned into", async () => {
+    const user = userEvent.setup();
+    mockApi(routes());
+    renderApp("/projects/1/traceability");
+    await screen.findByText("A: sign in");
+    // B was planned into sprint 1 and carried over into sprint 2
+    expect(within(rowOf("B: sign out")).getByText("Sprints 1, 2")).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Sprint" }), "1");
+    expect(screen.getByText("A: sign in")).toBeInTheDocument();
+    expect(screen.getByText("B: sign out")).toBeInTheDocument();
+    expect(screen.queryByText("E: extra")).toBeNull();
+  });
+
   it("filters stories that are not planned", async () => {
     const user = userEvent.setup();
     mockApi(routes());

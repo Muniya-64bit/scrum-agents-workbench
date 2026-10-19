@@ -87,6 +87,36 @@ def test_traceability_details(seeded):
     assert e["complete"] is False and e["last_test_ok"] is None and e["sprint_number"] is None
 
 
+def test_traceability_lists_every_sprint_a_story_was_planned_into(api):
+    """A story carried over from sprint 1 into sprint 2 belongs to both; a rejected plan leaves
+    nothing behind; a story carried over and never replanned keeps its sprint 1."""
+    c, factory = api
+    with factory() as db:
+        p = repo.create_project(db, "Library", "A library")
+        t = Tools(db, p.id, "scrum_master")
+        epic = t.create_epic("Core")
+        carried, stays, rejected, _never = (
+            t.create_story(epic.id, title=name, points=1).id
+            for name in ("carried", "stays", "rejected", "never"))
+        s1 = t.create_sprint("one", 10)
+        for story_id in (carried, stays, rejected):
+            t.add_story_to_sprint(s1.id, story_id)
+        t.unplan_story(rejected, s1.id)  # unplanned by hand, not by a rejected plan: still in s1
+        t.unplan_story(carried, s1.id)
+        t.unplan_story(stays, s1.id)
+        s2 = t.create_sprint("two", 10)
+        t.add_story_to_sprint(s2.id, carried)
+        t.add_story_to_sprint(s2.id, rejected)
+        t.reset_sprint_plan(s2.id, "too big")  # the plan for sprint 2 is rejected
+        t.add_story_to_sprint(s2.id, carried)
+        pid = p.id
+    rows = {r["title"]: r for r in c.get(f"/projects/{pid}/traceability").json()}
+    assert rows["carried"]["sprints"] == [1, 2] and rows["carried"]["sprint_number"] == 2
+    assert rows["stays"]["sprints"] == [1] and rows["stays"]["sprint_number"] is None
+    assert rows["rejected"]["sprints"] == [1]  # sprint 2's rejected plan does not count
+    assert rows["never"]["sprints"] == []
+
+
 def test_empty_project_metrics(api):
     c, _ = api
     pid = c.post("/projects", json={"name": "n", "idea": "i"}).json()["id"]
