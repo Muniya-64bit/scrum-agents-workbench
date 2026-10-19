@@ -14,7 +14,7 @@ All bodies are JSON. There is no authentication; run locally only.
 | GET | `/projects/{id}/events` | List activity events |
 | GET | `/projects/{id}/stream` | Live activity events (Server-Sent Events) |
 | GET | `/projects` | List all projects |
-| GET | `/projects/{id}/backlog` | Vision, epics and their stories (priority order) |
+| GET | `/projects/{id}/backlog` | Vision, epics and their stories (priority order), NFRs and the backlog check |
 | GET | `/projects/{id}/sprints` | Sprints with story ids and total points |
 | GET | `/sprints/{id}` | One sprint with its stories and tasks |
 | GET | `/projects/{id}/tasks?sprint_id=&status=` | Tasks, optionally filtered |
@@ -25,6 +25,7 @@ All bodies are JSON. There is no authentication; run locally only.
 | GET | `/projects/{id}/traceability` | Story -> design -> code -> test table with test results |
 | GET | `/projects/{id}/releases` | One release per finished sprint (`v0.N.0`) with its notes artifact |
 | GET | `/projects/{id}/process` | The sprint's process levers and the process planned for the next sprint |
+| GET | `/process/model` | The process model: roles, product flow, entry/exit criteria and RACI per phase |
 | GET | `/projects/{id}/metrics` | GQM metrics per sprint, project totals, cost |
 | GET | `/sprints/{id}/burndown` | Burndown series and ideal line of one sprint |
 
@@ -54,6 +55,13 @@ gate, `awaiting_approval` is `true`.
 
 Add `&comment=...` to record a reason, for example when rejecting. It is saved as the message
 of the `approved` or `rejected` event.
+
+Rejecting **sprint planning** returns the planned stories to the backlog, removes the tasks the
+plan created (a carried-over story keeps its earlier tasks) and sets the sprint to `replanning`.
+The project stays at `sprint_planning` with `"replanning": true`, and the next `advance` plans the
+same sprint again; the Scrum Master's prompt includes the reason. Rejecting the **review** does
+not repeat the sprint: the next `advance` runs the retrospective, which is told the reason and
+must respond to it.
 
 | Status | Meaning |
 |---|---|
@@ -100,7 +108,9 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
 `sprint_created`, `story_planned`, `sprint_skipped`, `story_carried_over`, `process_changed`,
 `burndown_snapshot`, `retro_saved`, `retro_exists`, `standup`, `tests_unchanged`,
 `tests_written_first`, `release_created`, `release_exists`, `release_skipped`,
-`llm_replay_drift`, `llm_replay_fallback`.
+`llm_replay_drift`, `llm_replay_fallback`, `nfrs_set`, `backlog_validated`,
+`entry_criteria_checked`, `exit_criteria_checked`, `sprint_plan_rejected`, `story_unplanned`,
+`sprint_replanned`.
 
 ## Backlog
 `GET /projects/1/backlog`
@@ -114,6 +124,18 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
 ```
 A story's `status` is `backlog` or `sprint` as stored, and `done` once all its tasks are done (derived
 when the response is built; the same value is used in sprint details and the traceability rows).
+
+The response also has `nfrs`, the non-functional requirements the Product Owner wrote (`[]` if
+none), and `quality`, the latest rule-based backlog check (`null` before the backlog phase). See
+`workbench/requirements.py` for the rules.
+```json
+{"nfrs": [{"category": "product", "requirement": "The API shall answer in fixed time.",
+           "measure": "95% of requests answered in under 300 ms"}],
+ "quality": {"stories": 6, "flagged_stories": 1,
+             "warnings": [{"rule": "vague_wording", "story_id": 4,
+                           "message": "Wording is vague and cannot be verified",
+                           "detail": "easy"}]}}
+```
 
 ## Sprints
 `GET /projects/1/sprints` returns
@@ -175,6 +197,14 @@ defaults. Unknown project: 404.
                   "guidelines": [[], ["Write the acceptance tests first and make them pass before committing"]]},
  "next_reason": "Commit to last sprint's velocity (yesterday's weather); ..."}
 ```
+
+## Process model
+`GET /process/model` returns one entry per phase from `workbench/process_model.py`: `phase`,
+`name`, `purpose`, `responsible`, `agents`, `consumes`, `produces`, `gate`, `raci` (role ->
+`R`, `A`, `R/A`, `C` or `I`), and `entry` and `exit` criteria (`[{id, text}]`). The orchestrator
+checks the criteria at every phase and logs `entry_criteria_checked` and `exit_criteria_checked`
+events (`payload.results`, `payload.unmet`). They are advisory and never block a step. The same
+model generates the tables in [process-handbook.md](process-handbook.md).
 
 ## Metrics
 `GET /projects/1/metrics` returns the GQM metrics (definitions in [metrics.md](metrics.md)).

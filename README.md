@@ -31,7 +31,11 @@ ceremonies.
 
 ## Features
 - Six role-based agents: Product Owner, Scrum Master, Architect, Developer, QA, DevOps
-- Scrum state machine with human approval gates at sprint planning and sprint review
+- Scrum state machine with human approval gates at sprint planning and sprint review; rejecting
+  a sprint plan has it planned again with your reason
+- Explicit process model (roles, product flow, entry/exit criteria, RACI) that drives the
+  orchestrator and generates the [process handbook](docs/process-handbook.md)
+- Non-functional requirements with measurable targets, and a rule-based backlog quality check
 - Traceability matrix story → design → code → tests with an artifact viewer
 - Metrics dashboard (GQM): burndown, velocity, quality, AI cost
 - Retrospective levers that change the next sprint, a versioned release per sprint and a
@@ -74,6 +78,7 @@ stateDiagram-v2
   [*] --> idea
   idea --> backlog
   backlog --> sprint_planning
+  sprint_planning --> sprint_planning: human rejects (plan again)
   sprint_planning --> execution: human approves
   execution --> review
   review --> retro: human approves
@@ -197,6 +202,7 @@ Set in `.env` (copy from `.env.example`).
 | GET | `/projects/{id}/traceability` | Story -> design -> code -> test -> release |
 | GET | `/projects/{id}/releases` | Versioned release per sprint |
 | GET | `/projects/{id}/process` | Process levers now and for the next sprint |
+| GET | `/process/model` | Process model: roles, product flow, entry/exit criteria, RACI |
 | GET | `/projects/{id}/metrics`, `/sprints/{id}/burndown` | GQM metrics, burndown series |
 | GET | `/projects/{id}/improvement` | One Plan-Do-Check-Act row per sprint |
 
@@ -275,6 +281,7 @@ retrospectives are in [docs/scrum](docs/scrum).
 | [docs/frontend.md](docs/frontend.md) | Web UI: running it, structure, design tokens |
 | [docs/demo.md](docs/demo.md) | Run the scripted demo, write a scenario, record a real run |
 | [docs/metrics.md](docs/metrics.md) | GQM goals, questions and metrics, how they are computed, limits |
+| [docs/process-handbook.md](docs/process-handbook.md) | The team's process: activities, product flow, RACI, entry/exit criteria, templates |
 | [docs/scrum](docs/scrum/README.md) | Our stand-ups and retrospectives |
 
 ## License

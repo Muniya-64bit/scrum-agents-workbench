@@ -80,6 +80,28 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
       const parts = describeDiff((e.payload.diff ?? {}) as Record<string, [unknown, unknown]>);
       return { text: `Changed the process: ${parts.join(", ") || "no lever"}`, tone: "accent" };
     }
+    case "nfrs_set":
+      return { text: `Wrote ${m}`, tone: "neutral" };
+    case "backlog_validated":
+      return {
+        text: `Checked the backlog: ${m}`,
+        tone: Array.isArray(e.payload.warnings) && e.payload.warnings.length > 0 ? "testing" : "done",
+      };
+    case "entry_criteria_checked":
+    case "exit_criteria_checked": {
+      const which = e.kind.startsWith("entry") ? "Entry" : "Exit";
+      const unmet = Array.isArray(e.payload.unmet) ? e.payload.unmet.length : 0;
+      return {
+        text: `${which} criteria of ${phaseLabel(String(e.payload.phase ?? "") as Phase)}: ${m}`,
+        tone: unmet > 0 ? "testing" : "neutral",
+      };
+    }
+    case "sprint_plan_rejected":
+      return { text: `${m}${e.payload.reason ? `: ${e.payload.reason}` : ""}`, tone: "danger" };
+    case "story_unplanned":
+      return { text: `Returned ${q(m)} to the backlog`, tone: "neutral" };
+    case "sprint_replanned":
+      return { text: `Re-planned ${m}`, tone: "accent" };
     case "story_carried_over":
       return { text: `Moved ${q(m)} back to the backlog for the next sprint`, tone: "testing" };
     case "tests_written_first":

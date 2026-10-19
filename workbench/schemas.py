@@ -1,6 +1,8 @@
 """Shared contracts. Every agent's structured output is a pydantic model; the LLM wrapper
 validates against it. Change these only with team agreement (see docs/architecture.md)."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 ROLES = ["product_owner", "scrum_master", "architect", "developer", "qa", "devops"]
@@ -28,9 +30,22 @@ class EpicOut(BaseModel):
     stories: list[StoryOut] = []
 
 
+class NfrOut(BaseModel):
+    """A non-functional requirement: a constraint on the whole system, with a target that can be
+    tested (a goal such as "easy to use" is not enough)."""
+
+    category: Literal["product", "organizational", "external"] = Field(
+        description="product: how the software behaves (speed, reliability, usability); "
+                    "organizational: policies and standards; external: laws, interoperability")
+    requirement: str = Field(description="One sentence using 'shall'")
+    measure: str = Field(description="How it is verified, with a number, e.g. "
+                                     "'95% of requests answered in under 300 ms'")
+
+
 class BacklogOutput(AgentOutput):  # Product Owner
     vision: str
     epics: list[EpicOut]
+    nfrs: list[NfrOut] = []
 
 
 class TaskOut(BaseModel):

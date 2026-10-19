@@ -293,6 +293,17 @@ def author_backlog() -> None:
                         "answers 422"], 3, 3),
              ]},
         ],
+        "nfrs": [
+            {"category": "product",
+             "requirement": "The API shall answer every request within a fixed time limit.",
+             "measure": "95% of requests answered in under 200 ms with 1,000 items"},
+            {"category": "product",
+             "requirement": "The API shall reject invalid input without changing any data.",
+             "measure": "100% of invalid requests answered with 422 and no item changed"},
+            {"category": "organizational",
+             "requirement": "Every story shall be covered by automated tests before release.",
+             "measure": "At least 1 passing pytest test per acceptance criterion"},
+        ],
     })
 
 

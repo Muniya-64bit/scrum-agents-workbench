@@ -69,6 +69,15 @@ describe("sprint loop", () => {
     expect(await screen.findByRole("button", { name: "Start Sprint planning" })).toBeInTheDocument();
   });
 
+  it("offers to plan the sprint again after the plan was rejected", async () => {
+    mockApi({
+      ...backlogRoute,
+      "GET /projects/1": { ...project, phase: "sprint_planning", replanning: true },
+    });
+    renderApp("/projects/1/backlog");
+    expect(await screen.findByRole("button", { name: "Plan the sprint again" })).toBeInTheDocument();
+  });
+
   it("finishes the project after the release when no sprint follows", async () => {
     mockApi({ ...backlogRoute, "GET /projects/1": { ...project, phase: "release" } });
     renderApp("/projects/1/backlog");

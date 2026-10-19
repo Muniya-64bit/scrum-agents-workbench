@@ -21,6 +21,30 @@ describe("describeEvent", () => {
     [ev("artifact_created", "app.py", { artifact_kind: "api_spec" }), "Wrote api spec “app.py”", "neutral"],
     [ev("bug_reported", "500 on save"), "Reported a bug: 500 on save", "danger"],
     [ev("code_committed", "Story #3: Add"), "Code committed: Story #3: Add", "neutral"],
+    [ev("nfrs_set", "2 non-functional requirement(s)"), "Wrote 2 non-functional requirement(s)", "neutral"],
+    [
+      ev("backlog_validated", "1 warning(s) on 1 of 2 stories", { warnings: [{ rule: "x" }] }),
+      "Checked the backlog: 1 warning(s) on 1 of 2 stories",
+      "testing",
+    ],
+    [ev("backlog_validated", "0 warning(s)", { warnings: [] }), "Checked the backlog: 0 warning(s)", "done"],
+    [
+      ev("entry_criteria_checked", "0 of 1 entry criteria met", { phase: "sprint_planning", unmet: ["x"] }),
+      "Entry criteria of Planning: 0 of 1 entry criteria met",
+      "testing",
+    ],
+    [
+      ev("exit_criteria_checked", "1 of 1 exit criteria met", { phase: "review", unmet: [] }),
+      "Exit criteria of Review: 1 of 1 exit criteria met",
+      "neutral",
+    ],
+    [
+      ev("sprint_plan_rejected", "Sprint 1 will be planned again", { reason: "Too big" }),
+      "Sprint 1 will be planned again: Too big",
+      "danger",
+    ],
+    [ev("story_unplanned", "Add item"), "Returned “Add item” to the backlog", "neutral"],
+    [ev("sprint_replanned", "Sprint 1: Smaller goal"), "Re-planned Sprint 1: Smaller goal", "accent"],
     [
       ev("sprint_planned", "Sprint 2: 7 points committed", {
         number: 2, committed_points: 7, story_ids: [3, 4],

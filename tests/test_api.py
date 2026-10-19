@@ -203,5 +203,10 @@ def test_reject_with_comment_is_logged(api):
     c.post(f"/projects/{pid}/advance")  # sprint planning gate
     r = c.post(f"/projects/{pid}/approve", params={"approved": False, "comment": "Too big"})
     assert r.status_code == 200 and r.json()["awaiting_approval"] is False
-    last = c.get(f"/projects/{pid}/events").json()[-1]
-    assert (last["kind"], last["message"], last["agent"]) == ("rejected", "Too big", "human")
+    assert r.json()["replanning"] is True  # the next step plans the sprint again
+    events = c.get(f"/projects/{pid}/events").json()
+    rejected = next(e for e in events if e["kind"] == "rejected")
+    assert (rejected["message"], rejected["agent"]) == ("Too big", "human")
+    assert events[-1]["kind"] == "sprint_plan_rejected"
+    assert all(s["sprint_id"] is None
+               for e in c.get(f"/projects/{pid}/backlog").json()["epics"] for s in e["stories"])

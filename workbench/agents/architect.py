@@ -12,6 +12,7 @@ import re
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from workbench import requirements
 from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
@@ -63,6 +64,12 @@ Rules:
             lines += _story_lines(stories)
         else:
             lines.append("There is no backlog yet; design from the idea.")
+        nfrs = requirements.nfrs(db, project_id)
+        if nfrs:
+            lines += ["", "Non-functional requirements (the architecture must meet these; "
+                      "name the decision that meets each one under Key decisions):"]
+            lines += [f"- [{n['category']}] {n['requirement']} Measure: {n['measure']}"
+                      for n in nfrs]
         return "\n".join(lines)
 
     def mock_output(self, db: Session, project_id: int, task: dict) -> dict:

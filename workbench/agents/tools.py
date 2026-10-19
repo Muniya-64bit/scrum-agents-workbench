@@ -18,6 +18,17 @@ class Tools:
         self.log("vision_set", vision)
         return p
 
+    def set_nfrs(self, nfrs: list[dict]) -> m.Artifact:
+        """Store the non-functional requirements: a Markdown artifact for people, the list in the
+        `nfrs_set` event for code (see workbench.requirements)."""
+        from workbench.requirements import NFR_PATH, nfr_markdown
+
+        a = self.write_artifact("requirements", "Non-functional requirements",
+                                nfr_markdown(nfrs), path=NFR_PATH)
+        self.log("nfrs_set", f"{len(nfrs)} non-functional requirement(s)", nfrs=nfrs,
+                 artifact_id=a.id)
+        return a
+
     def create_epic(self, title: str, description: str = "") -> m.Epic:
         e = m.Epic(project_id=self.project_id, title=title, description=description)
         e = repo.add(self.db, e)
@@ -34,6 +45,33 @@ class Tools:
         s = repo.add(self.db, m.Sprint(project_id=self.project_id, number=number, goal=goal,
                                        capacity=capacity, status="active"))
         self.log("sprint_created", f"Sprint {number}: {goal}", sprint_id=s.id)
+        return s
+
+    def reset_sprint_plan(self, sprint_id: int, reason: str = "") -> m.Sprint:
+        """Undo a rejected sprint plan: stories go back to the backlog, the tasks the plan created
+        are removed (a carried-over story keeps its earlier tasks) and the sprint waits to be
+        planned again (`replanning`)."""
+        sprint = repo.get(self.db, m.Sprint, sprint_id)
+        carried = {e.payload.get("story_id") for e in repo.events_since(self.db, self.project_id)
+                   if e.kind == "story_carried_over"}
+        story_ids = []
+        for story in list(sprint.stories):
+            if story.id not in carried:
+                for t in list(story.tasks):
+                    self.db.delete(t)
+            repo.update(self.db, story, sprint_id=None, status="backlog")
+            story_ids.append(story.id)
+            self.log("story_unplanned", story.title, story_id=story.id, sprint_id=sprint_id)
+        sprint = repo.update(self.db, sprint, status="replanning")
+        self.log("sprint_plan_rejected", f"Sprint {sprint.number} will be planned again",
+                 sprint_id=sprint_id, story_ids=story_ids, reason=reason)
+        return sprint
+
+    def reopen_sprint(self, sprint_id: int, goal: str, capacity: int) -> m.Sprint:
+        """Plan a sprint whose earlier plan was rejected, keeping its number."""
+        s = repo.update(self.db, repo.get(self.db, m.Sprint, sprint_id), goal=goal,
+                        capacity=capacity, status="active")
+        self.log("sprint_replanned", f"Sprint {s.number}: {goal}", sprint_id=s.id)
         return s
 
     def add_story_to_sprint(self, sprint_id: int, story_id: int) -> m.UserStory:

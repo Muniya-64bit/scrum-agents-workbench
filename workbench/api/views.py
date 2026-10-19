@@ -22,6 +22,8 @@ class ProjectView(_ORM):
     # True while the project is at `release` and another sprint will follow (stories left that
     # fit the next capacity, fewer than MAX_SPRINTS sprints so far); always False otherwise
     has_more_sprints: bool = False
+    # True after the human rejected the sprint plan: the next step plans the same sprint again
+    replanning: bool = False
 
 
 class StoryView(_ORM):
@@ -45,9 +47,32 @@ class EpicView(BaseModel):
     stories: list[StoryView]
 
 
+class NfrView(BaseModel):
+    category: str
+    requirement: str
+    measure: str
+
+
+class QualityWarning(BaseModel):
+    rule: str
+    story_id: int | None
+    message: str
+    detail: str
+
+
+class BacklogQualityView(BaseModel):
+    """The latest rule-based backlog check (`backlog_validated` event)."""
+
+    stories: int
+    flagged_stories: int
+    warnings: list[QualityWarning]
+
+
 class BacklogView(BaseModel):
     vision: str
     epics: list[EpicView]
+    nfrs: list[NfrView] = []
+    quality: BacklogQualityView | None = None
 
 
 class TaskView(_ORM):
@@ -151,6 +176,27 @@ class ProcessView(BaseModel):
     next: dict
     next_changes: dict
     next_reason: str
+
+
+class CriterionView(BaseModel):
+    id: str
+    text: str
+
+
+class ActivityView(BaseModel):
+    """One phase of the process model (see workbench/process_model.py)."""
+
+    phase: str
+    name: str
+    purpose: str
+    responsible: str
+    agents: list[str]
+    consumes: list[str]
+    produces: list[str]
+    gate: bool
+    raci: dict[str, str]
+    entry: list[CriterionView]
+    exit: list[CriterionView]
 
 
 class ImprovementPlan(BaseModel):

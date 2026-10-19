@@ -7,6 +7,7 @@ from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
 from workbench.db import repo
+from workbench.requirements import validate_backlog
 from workbench.schemas import BacklogOutput
 
 SYSTEM_PROMPT = """You are an experienced Scrum Product Owner.
@@ -22,6 +23,11 @@ Rules:
 - priority is 1 (highest) to 5 (lowest). Put the stories needed for a first working version at
   priority 1 or 2.
 - points is a relative size estimate (1, 2, 3, 5, 8 or 13). Split anything larger than 8.
+- Avoid vague words such as fast, easy, simple or user-friendly; say what can be checked.
+- nfrs: 2 to 4 non-functional requirements for the whole system. category is product (speed,
+  reliability, usability, security of the software), organizational (standards, policies) or
+  external (laws, privacy, interoperability). requirement is one sentence using "shall";
+  measure is how it is verified and contains a number.
 - Keep the scope small enough for a team to build in a few days.
 - summary is one sentence describing what you produced."""
 
@@ -74,6 +80,14 @@ class ProductOwnerAgent(BaseAgent):
                     ],
                 }
             ],
+            "nfrs": [
+                {"category": "product",
+                 "requirement": "The API shall answer list and create requests in fixed time.",
+                 "measure": "95% of requests answered in under 300 ms with 1,000 items"},
+                {"category": "organizational",
+                 "requirement": "Every story shall be covered by automated tests.",
+                 "measure": "Each acceptance criterion has at least 1 passing pytest test"},
+            ],
         }
 
     def apply(self, tools: Tools, out: BaseModel, task: dict) -> None:
@@ -83,3 +97,6 @@ class ProductOwnerAgent(BaseAgent):
             e = tools.create_epic(epic.title, epic.description)
             for story in epic.stories:
                 tools.create_story(e.id, **story.model_dump())
+        if out.nfrs:
+            tools.set_nfrs([n.model_dump() for n in out.nfrs])
+        validate_backlog(tools.db, tools.project_id, self.role)
