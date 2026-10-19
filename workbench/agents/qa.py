@@ -58,9 +58,21 @@ _TEST_SIDE = re.compile(r"NameError|ImportError|ModuleNotFoundError|SyntaxError|
                         re.IGNORECASE)
 
 
-def _test_side(f: runner.Failure) -> bool:
-    return not f.test.startswith("contract") and (
-        f.test in ("collection", "pytest") or bool(_TEST_SIDE.search(f.message)))
+def _code_error(output: str) -> bool:
+    """The traceback runs through the application's own files, so the code is at fault."""
+    return bool(re.search(r"^app/\S+\.py:\d+", output, re.MULTILINE))
+
+
+def _test_side(f: runner.Failure, output: str = "") -> bool:
+    """True when the test code itself is broken (and not the application it imports)."""
+    return (not f.test.startswith("contract") and not _code_error(output)
+            and (f.test in ("collection", "pytest") or bool(_TEST_SIDE.search(f.message))))
+
+
+def _error_line(output: str) -> str:
+    """The first `E   SomeError: ...` line of pytest's output: the real reason of a failure."""
+    m = re.search(r"^E\s+(.+)$", output, re.MULTILINE)
+    return m.group(1).strip()[:200] if m else ""
 
 
 def _tests_for(db: Session, project_id: int, story_id: int) -> list[str]:
@@ -185,7 +197,7 @@ class QAAgent(BaseAgent):
                 return True
             if attempt == max_retries:
                 break
-            if any(_test_side(f) for f in result.failures):  # the tests are wrong, not the code
+            if any(_test_side(f, result.output) for f in result.failures):  # tests are wrong
                 if not self._revise_tests(db, tools, story, task, result):
                     break  # the same file again: another attempt would repeat this one
             elif self.developer is not None and _fixable(_bugs(db, story.id), max_retries):
@@ -243,11 +255,14 @@ class QAAgent(BaseAgent):
         for t in qa_tasks:
             if t.status in ("todo", "doing"):
                 tools.update_task(t.id, "testing")
-        reportable = [f for f in result.failures if not _test_side(f)]
+        reportable = [f for f in result.failures if not _test_side(f, result.output)]
+        reason = _error_line(result.output)
         for f in reportable[:MAX_BUGS_PER_RUN]:
             known = next((b for b in bugs if b.description.startswith(f"{f.test}:")), None)
             if known is None:
-                tools.report_bug(story.id, f"{f.test}: {f.message}")
+                detail = f" ({reason})" if reason and reason not in f.message and (
+                    f.test in ("collection", "pytest") or "collection" in f.message) else ""
+                tools.report_bug(story.id, f"{f.test}: {f.message}{detail}")
             elif known.status == "fixed":  # the Developer said fixed, but it still fails
                 tools.reopen_bug(known.id)
 

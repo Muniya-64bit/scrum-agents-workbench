@@ -211,6 +211,19 @@ def test_broken_tests_are_rewritten_by_qa_and_file_no_bug(db: Session, project: 
     assert "mistake in the test code itself" in prompt and "NameError" in prompt
 
 
+def test_an_error_in_the_application_goes_to_the_developer_not_to_a_test_rewrite(
+        db: Session, project: m.Project, coded: m.UserStory, monkeypatch):
+    """A NameError raised from app/ code (not from tests/) is the Developer's bug."""
+    Workspace(project.id).write(f"app/features/story_{coded.id}.py", "value = undefined_name\n")
+    developer = DeveloperAgent(_fake_llm(monkeypatch, _fix_reply(coded, "Create an item")))
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "Create an item"))
+    QAAgent(qa_llm, developer=developer).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "tests_revised" not in kinds and "bug_fixed" in kinds
+    (bug,) = repo.bugs(db, project.id)
+    assert "NameError" in bug.description  # the real reason reaches the Developer
+
+
 def test_an_unchanged_rewrite_stops_the_loop(db: Session, project: m.Project,
                                              coded: m.UserStory, monkeypatch):
     llm = _fake_llm(monkeypatch, _broken_tests(coded), _broken_tests(coded))
