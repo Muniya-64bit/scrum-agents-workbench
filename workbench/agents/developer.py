@@ -46,6 +46,9 @@ Rules:
   FastAPI app: the FastAPI object `app` in app/main.py, dependencies in requirements.txt, data
   kept in SQLite or in memory.
 - Satisfy every acceptance criterion. Validate input and return clear HTTP errors.
+- Read POST and PUT data from a JSON body declared as a pydantic model, never as bare function
+  parameters (FastAPI reads those from the query string). Return 201 for a create and 404 for
+  an unknown id. Import every module you use.
 - If bugs are listed, fix them first without breaking existing behaviour.
 - Do not write tests; QA writes them in tests/. Keep the code small and readable.
 - summary is one sentence describing what you changed."""
