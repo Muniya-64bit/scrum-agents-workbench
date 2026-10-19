@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from workbench import contract
 from workbench.agents.architect import ArchitectAgent, DesignDelta, SystemDesigner
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
@@ -15,6 +16,8 @@ from workbench.schemas import ArchitectureOutput, StoryDesignOut
 
 BACKLOG = {"name": "backlog", "phase": "backlog"}
 EXECUTION = {"name": "execution", "phase": "execution"}
+ENDPOINT = {"method": "POST", "path": "/books", "purpose": "Add a book",
+            "request_fields": ["title: str"], "success_status": 201, "error_statuses": [422]}
 
 
 @pytest.fixture
@@ -85,11 +88,42 @@ def test_design_delta_prompt_uses_existing_architecture(db: Session, project: m.
     assert "Delete an item" not in prompt
 
 
+def test_design_without_endpoints_is_retried(db: Session, project: m.Project, monkeypatch):
+    first = repo.backlog(db, project.id)[0]
+    bad = {"designs": [{"story_id": first.id, "notes": "no contract"}]}
+    good = {"designs": [{"story_id": first.id, "notes": "n", "endpoints": [ENDPOINT]}]}
+    replies = iter([json.dumps(bad), json.dumps(good)])
+    llm = LLMClient(mock=False, use_cache=False)
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: next(replies))
+    ArchitectAgent(llm).run(db, project.id, EXECUTION)
+    assert [a.name for a in _kinds(db, project.id, "design")] == [f"Design: {first.title}"]
+    assert llm.usage["invalid_outputs"] == 1
+
+
+def test_contract_is_rendered_from_the_endpoints(db: Session, project: m.Project, monkeypatch):
+    first = repo.backlog(db, project.id)[0]
+    reply = json.dumps({"designs": [{"story_id": first.id, "notes": "n", "endpoints": [ENDPOINT]}]})
+    llm = LLMClient(mock=False, use_cache=False)
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: reply)
+    ArchitectAgent(llm).run(db, project.id, EXECUTION)
+    spec = next(a for a in _kinds(db, project.id, "api_spec") if a.name.startswith("API:"))
+    assert contract.parse(spec.content) == [contract.Endpoint("POST", "/books", 201)]
+    assert "title: {type: string}" in spec.content
+
+
+def test_design_prompt_lists_endpoints_already_designed(db: Session, project: m.Project):
+    ArchitectAgent().run(db, project.id, EXECUTION)
+    prompt = DesignDelta().build_prompt(db, project.id, EXECUTION)
+    assert "Endpoints already designed" in prompt and "POST /" in prompt
+
+
 def test_design_delta_drops_unknown_story_ids(db: Session, project: m.Project, monkeypatch):
     first = repo.backlog(db, project.id)[0]
-    reply = json.dumps({"designs": [{"story_id": 999, "notes": "x"},
-                                    {"story_id": first.id, "notes": "real"},
-                                    {"story_id": first.id, "notes": "duplicate"}]})
+    reply = json.dumps({"designs": [{"story_id": 999, "notes": "x", "endpoints": [ENDPOINT]},
+                                    {"story_id": first.id, "notes": "real",
+                                     "endpoints": [ENDPOINT]},
+                                    {"story_id": first.id, "notes": "duplicate",
+                                     "endpoints": [ENDPOINT]}]})
     llm = LLMClient(mock=False, use_cache=False)
     monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: reply)
     ArchitectAgent(llm).run(db, project.id, EXECUTION)
@@ -118,7 +152,8 @@ def test_mermaid_validation():
         ArchitectureOutput(overview="o", api_spec="a", diagrams=[{"name": "x", "mermaid": "box"}])
     with pytest.raises(ValidationError):
         ArchitectureOutput(overview="o", api_spec="a", diagrams=[])
-    assert StoryDesignOut(story_id=1, notes="n", diagram="  ").diagram == ""
+    assert StoryDesignOut(story_id=1, notes="n", diagram="  ",
+                          endpoints=[ENDPOINT]).diagram == ""
 
 
 def test_unknown_phase_is_rejected(db: Session, project: m.Project):

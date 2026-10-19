@@ -12,7 +12,7 @@ import re
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import requirements
+from workbench import contract, requirements
 from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
@@ -34,6 +34,12 @@ def _story_lines(stories: list[m.UserStory]) -> list[str]:
         lines.append(f"[{s.id}] {s.title}: As a {s.as_a}, I want {s.i_want}, so that {s.so_that}")
         lines += [f"    - {c}" for c in s.acceptance_criteria]
     return lines
+
+
+def _designed_endpoints(db: Session, project_id: int) -> list[contract.Endpoint]:
+    """The endpoints of the story contracts written so far (each artifact is named `API: ...`)."""
+    return [e for a in repo.artifacts(db, project_id, "api_spec") if a.name.startswith("API:")
+            for e in contract.parse(a.content)]
 
 
 class SystemDesigner(BaseAgent):
@@ -142,7 +148,12 @@ Rules:
 - notes is short Markdown: components touched, data model changes, edge cases from the
   acceptance criteria.
 - diagram is an optional raw Mermaid sequenceDiagram (no ``` fences) for the story's flow.
-- api_spec is an optional OpenAPI 3.0 YAML snippet with only the paths this story adds or changes.
+- endpoints is the API contract of the story: every HTTP endpoint it needs, and at least one.
+  Each has method, path (path parameters in braces, e.g. /books/{book_id}), purpose,
+  request_fields ("name: type" for the JSON body), success_status and error_statuses. Use 201 for
+  a create, 404 for an unknown id, 409 for a conflict with existing data and 422 for invalid
+  input. The Developer builds exactly these endpoints and QA tests exactly these.
+- Reuse the paths listed under "Endpoints already designed" and keep one naming style.
 - Stay consistent with the existing architecture; do not redesign it.
 - summary is one sentence."""
 
@@ -150,6 +161,10 @@ Rules:
         overview = repo.artifacts(db, project_id, "architecture")
         lines = ["Existing architecture:",
                  overview[-1].content[:OVERVIEW_CHARS] if overview else "(none yet)", ""]
+        existing = _designed_endpoints(db, project_id)
+        if existing:
+            lines += ["Endpoints already designed:"] + [f"- {e} -> {e.success_status}"
+                                                        for e in existing] + [""]
         lines += ["Sprint stories needing design ([id] title: story, then acceptance criteria):"]
         lines += _story_lines(repo.stories_without_design(db, project_id))
         return "\n".join(lines)
@@ -163,9 +178,10 @@ Rules:
                 "notes": f"## {s.title}\n- API: add `POST {path}`\n- Data: no schema change\n"
                          + "".join(f"- Covers: {c}\n" for c in s.acceptance_criteria),
                 "diagram": f"sequenceDiagram\n  actor U as User\n  U->>API: POST {path}\n"
-                           "  API-->>U: 200 OK",
-                "api_spec": f"paths:\n  {path}:\n    post:\n      summary: {s.title}\n"
-                            "      responses:\n        '200':\n          description: OK\n",
+                           "  API-->>U: 201 Created",
+                "endpoints": [{"method": "POST", "path": path, "purpose": s.title,
+                               "request_fields": ["title: str"], "success_status": 201,
+                               "error_statuses": [422]}],
             })
         return {"summary": f"Designed {len(designs)} sprint stories", "designs": designs}
 
@@ -182,9 +198,8 @@ Rules:
             if d.diagram:
                 tools.write_artifact("diagram", f"Flow: {story.title}", d.diagram,
                                      story_id=story.id, path=f"{base}.mmd")
-            if d.api_spec:
-                tools.write_artifact("api_spec", f"API: {story.title}", d.api_spec,
-                                     story_id=story.id, path=f"{base}.yaml")
+            tools.write_artifact("api_spec", f"API: {story.title}", contract.render(d.endpoints),
+                                 story_id=story.id, path=f"{base}.yaml")
         for story in pending.values():
             tools.log("design_missing", story.title, story_id=story.id)
 

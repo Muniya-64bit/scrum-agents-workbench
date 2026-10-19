@@ -22,6 +22,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from workbench import contract
 from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
@@ -46,6 +47,8 @@ Rules:
   FastAPI app: the FastAPI object `app` in app/main.py, dependencies in requirements.txt, data
   kept in SQLite or in memory.
 - Satisfy every acceptance criterion. Validate input and return clear HTTP errors.
+- If an API contract is given, implement exactly its methods, paths, JSON field names and success
+  status codes (put status_code=201 on a create route), and add no other endpoints.
 - Read POST and PUT data from a JSON body declared as a pydantic model, never as bare function
   parameters (FastAPI reads those from the query string). Return 201 for a create and 404 for
   an unknown id. Import every module you use.
@@ -150,8 +153,13 @@ class DeveloperAgent(BaseAgent):
 
         design = [a for link, a in repo.trace_links(db, project_id)
                   if link.story_id == story.id and link.relation in ("design", "api_spec")]
-        if design:
-            lines += ["", "Design notes for this story:"] + [a.content for a in design]
+        notes = [a for a in design if a.kind != "api_spec"]
+        if notes:
+            lines += ["", "Design notes for this story:"] + [a.content for a in notes]
+        spec = contract.for_story(db, project_id, story.id)[0]
+        if spec:
+            lines += ["", "API contract from the Architect (implement exactly these endpoints, "
+                          "JSON field names and status codes):", spec]
 
         max_retries = fix_retry_limit(db, project_id, task)
         bugs = _fixable_bugs(db, story.id, max_retries)

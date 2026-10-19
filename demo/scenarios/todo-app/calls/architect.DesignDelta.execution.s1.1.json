@@ -4,26 +4,66 @@
   "output": {
     "designs": [
       {
-        "api_spec": "paths:\n  /items:\n    post:\n      responses:\n        '201': { description: Created }\n        '422': { description: Empty title }\n",
         "diagram": "sequenceDiagram\n  U->>API: POST /items\n  API-->>U: 201 or 422",
+        "endpoints": [
+          {
+            "error_statuses": [],
+            "method": "POST",
+            "path": "/items",
+            "purpose": "Create item",
+            "request_fields": [
+              "title: str"
+            ],
+            "success_status": 201
+          }
+        ],
         "notes": "## Create item\n- Route `POST /items` creates `{id, title, done}`.\n- An empty or blank title is rejected with 422 and nothing is stored.\n",
         "story_id": 1
       },
       {
-        "api_spec": "paths:\n  /items:\n    get:\n      responses:\n        '200': { description: Items }\n",
         "diagram": "sequenceDiagram\n  U->>API: GET /items\n  API-->>U: 200 [items]",
+        "endpoints": [
+          {
+            "error_statuses": [],
+            "method": "GET",
+            "path": "/items",
+            "purpose": "List items",
+            "request_fields": [],
+            "success_status": 200
+          }
+        ],
         "notes": "## List items\n- Route `GET /items` returns the items in creation order.\n- An empty store returns `[]`, not an error.\n",
         "story_id": 2
       },
       {
-        "api_spec": "paths:\n  /items/{item_id}/complete:\n    post:\n      responses:\n        '200': { description: Completed }\n        '404': { description: Unknown item }\n",
         "diagram": "sequenceDiagram\n  U->>API: POST /items/1/complete\n  API-->>U: 200 or 404",
+        "endpoints": [
+          {
+            "error_statuses": [],
+            "method": "POST",
+            "path": "/items/{item_id}/complete",
+            "purpose": "Complete item",
+            "request_fields": [
+              "title: str"
+            ],
+            "success_status": 201
+          }
+        ],
         "notes": "## Complete item\n- Route `POST /items/{id}/complete` sets `done` to true.\n- An unknown id answers 404.\n",
         "story_id": 3
       },
       {
-        "api_spec": "paths:\n  /items/{item_id}:\n    delete:\n      responses:\n        '200': { description: Deleted }\n        '404': { description: Unknown item }\n",
         "diagram": "sequenceDiagram\n  U->>API: DELETE /items/1\n  API-->>U: 200 or 404",
+        "endpoints": [
+          {
+            "error_statuses": [],
+            "method": "DELETE",
+            "path": "/items/{item_id}",
+            "purpose": "Delete item",
+            "request_fields": [],
+            "success_status": 200
+          }
+        ],
         "notes": "## Delete item\n- Route `DELETE /items/{id}` removes the item.\n- An unknown id must answer 404, not succeed silently.\n",
         "story_id": 4
       }

@@ -174,7 +174,8 @@ LLM_PRICE_OUTPUT_PER_MTOK=0
 ```
 The client sends each agent's JSON schema to Ollama as `format`, so the model can only answer in
 the shape the agent expects. Calls are slow compared with the Claude API; a run takes minutes per
-phase. Models under about 7B parameters often fail the schemas. Use `make run`, which reloads only
+phase. A code model suits the agents that write code and tests: set
+`WORKBENCH_MODEL_DEVELOPER` and `WORKBENCH_MODEL_QA` to `qwen2.5-coder:14b`. Models under about 7B parameters often fail the schemas. Use `make run`, which reloads only
 when `workbench/` changes. Plain `uvicorn --reload` also watches `workspaces/`, where the agents
 write code, and restarts the API in the middle of a phase.
 
@@ -199,6 +200,7 @@ Set in `.env` (copy from `.env.example`).
 | `LLM_MODE` | from `MOCK_LLM` | `mock`, `live`, `record` or `replay` ([docs/development.md](docs/development.md#llm-modes)) |
 | `LLM_SCENARIO_DIR`, `LLM_REPLAY_FALLBACK` | empty, `error` | Scenario folder for record/replay; `mock` uses the mock answer when a recording is missing |
 | `DEFAULT_CAPACITY`, `DEFAULT_MAX_FIX_RETRIES`, `MAX_SPRINTS` | `10`, `3`, `3` | First sprint's points, Developer attempts per bug, sprints before the project ends |
+| `WORKBENCH_MODEL_<ROLE>` | `WORKBENCH_MODEL` | Model of one role, e.g. `WORKBENCH_MODEL_DEVELOPER`, `WORKBENCH_MODEL_QA` (roles: `PRODUCT_OWNER`, `SCRUM_MASTER`, `ARCHITECT`, `DEVELOPER`, `QA`, `DEVOPS`) |
 | `LLM_PROVIDER` | `anthropic` | Live backend: `anthropic` or `ollama` (local) |
 | `OLLAMA_URL`, `OLLAMA_NUM_CTX`, `OLLAMA_TIMEOUT` | `http://localhost:11434`, `16384`, `1800` | Ollama server, context window in tokens, seconds per answer |
 | `LLM_PRICE_INPUT_PER_MTOK`, `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0`, `10.0` | USD per million tokens for the cost estimate |

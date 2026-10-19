@@ -15,12 +15,13 @@ from the acceptance criteria and the planned design, and runs them once the code
 
 QA tasks move to `testing` while tests fail and to `done` once they pass."""
 
+import re
 from pathlib import Path
 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import runner
+from workbench import config, contract, runner
 from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
@@ -49,6 +50,17 @@ Rules:
   tests use.
 - Do not change application code. Do not use the network or sleep.
 - summary is one sentence."""
+
+
+# A failure caused by the test code itself (not by the application): QA rewrites its tests
+_TEST_SIDE = re.compile(r"NameError|ImportError|ModuleNotFoundError|SyntaxError|IndentationError|"
+                        r"fixture .* not found|failed on setup|collection|No tests were collected",
+                        re.IGNORECASE)
+
+
+def _test_side(f: runner.Failure) -> bool:
+    return not f.test.startswith("contract") and (
+        f.test in ("collection", "pytest") or bool(_TEST_SIDE.search(f.message)))
 
 
 def _tests_for(db: Session, project_id: int, story_id: int) -> list[str]:
@@ -167,19 +179,53 @@ class QAAgent(BaseAgent):
             return False
         for attempt in range(max_retries + 1):
             result = runner.run_pytest(self.workspace(project_id).path, targets, self.timeout)
+            result.failures[:0] = self._contract_failures(db, project_id, story)
             self._record(tools, story, result)
             if result.ok:
                 return True
-            if self.developer is None or not _fixable(_bugs(db, story.id), max_retries):
+            if attempt == max_retries:
                 break
-            if attempt < max_retries:
+            if any(_test_side(f) for f in result.failures):  # the tests are wrong, not the code
+                if not self._revise_tests(db, tools, story, task, result):
+                    break  # the same file again: another attempt would repeat this one
+            elif self.developer is not None and _fixable(_bugs(db, story.id), max_retries):
                 self.developer.run(db, project_id, {"name": "bug fix", "phase": "execution",
                                                     "story_id": story.id,
                                                     "max_fix_retries": max_retries})
+            else:
+                break
         if _bugs(db, story.id):
             tools.log("bugs_left_open", f"Story #{story.id} still fails after the fix attempts",
                       story_id=story.id)
         return False
+
+    def _contract_failures(self, db: Session, project_id: int,
+                           story: m.UserStory) -> list[runner.Failure]:
+        """Endpoints of the Architect's contract that the code does not implement (checked by
+        rules, live runs only: the mock Developer writes no routes)."""
+        if config.MOCK_LLM:
+            return []
+        wanted = contract.for_story(db, project_id, story.id)[1]
+        if not wanted:
+            return []
+        code = contract.implemented(self.workspace(project_id))
+        return [runner.Failure(f"contract {e}", problem)
+                for e, problem in contract.violations(wanted, code)]
+
+    def _revise_tests(self, db: Session, tools: Tools, story: m.UserStory, task: dict,
+                      result: runner.TestResult) -> bool:
+        """One LLM call: rewrite the story's tests from the failing output. True if they changed."""
+        ws = self.workspace(tools.project_id)
+        targets = _tests_for(db, tools.project_id, story.id)
+        before = {p: ws.read(p) for p in targets}
+        errors = "\n".join(f"- {f.test}: {f.message}" for f in result.failures[:MAX_BUGS_PER_RUN])
+        BaseAgent.run(self, db, tools.project_id, {
+            **task, "story_id": story.id, "name": "revise tests", "revise_tests": True,
+            "failures": f"{errors}\n\npytest output:\n{result.output[-1500:]}"})
+        changed = {p: ws.read(p) for p in targets} != before
+        tools.log("tests_revised" if changed else "tests_revision_unchanged",
+                  f"Story #{story.id}: {story.title}", story_id=story.id)
+        return changed
 
     def _record(self, tools: Tools, story: m.UserStory, result: runner.TestResult) -> None:
         failed = len(result.failures)
@@ -197,7 +243,8 @@ class QAAgent(BaseAgent):
         for t in qa_tasks:
             if t.status in ("todo", "doing"):
                 tools.update_task(t.id, "testing")
-        for f in result.failures[:MAX_BUGS_PER_RUN]:
+        reportable = [f for f in result.failures if not _test_side(f)]
+        for f in reportable[:MAX_BUGS_PER_RUN]:
             known = next((b for b in bugs if b.description.startswith(f"{f.test}:")), None)
             if known is None:
                 tools.report_bug(story.id, f"{f.test}: {f.message}")
@@ -214,6 +261,10 @@ class QAAgent(BaseAgent):
                  f"As a {story.as_a}, I want {story.i_want}, so that {story.so_that}",
                  "Acceptance criteria:"]
         lines += [f"- {c}" for c in story.acceptance_criteria] or ["- (none given)"]
+        spec = contract.for_story(db, project_id, story.id)[0]
+        if spec:
+            lines += ["", "API contract from the Architect (call exactly these methods and paths, "
+                          "send these JSON fields, expect these status codes):", spec]
         lines += ["", f"Write the tests in tests/test_story_{story.id}.py.", ""]
         if task.get("test_first"):
             lines += self._planned_api(db, project_id, story)
@@ -229,6 +280,15 @@ class QAAgent(BaseAgent):
                 continue
             used += len(content)
             lines += [f"=== {path} ===", content]
+        if task.get("revise_tests"):
+            lines += ["", "Your tests failed because of a mistake in the test code itself (a "
+                          "missing import, a wrong name, a bad setup), not in the application:",
+                      task.get("failures", ""), "", "Your current test file:"]
+            ws = self.workspace(project_id)
+            for path in _tests_for(db, project_id, story.id):
+                lines += [f"=== {path} ===", ws.read(path)]
+            lines += ["", "Return the corrected file in full. Keep one test per acceptance "
+                          "criterion and the same expectations."]
         return "\n".join(lines)
 
     def _planned_api(self, db: Session, project_id: int, story: m.UserStory) -> list[str]:

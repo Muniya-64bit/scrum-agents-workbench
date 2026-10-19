@@ -15,6 +15,15 @@ def _choice(name: str, value: str, allowed: tuple[str, ...]) -> str:
     return value
 
 MODEL = os.getenv("WORKBENCH_MODEL", "claude-sonnet-5-5")
+
+
+def model_for(role: str) -> str:
+    """Model of one agent role: WORKBENCH_MODEL_<ROLE> (for example WORKBENCH_MODEL_DEVELOPER),
+    else WORKBENCH_MODEL. A code model for Developer and QA and a general one for the rest is a
+    typical split on a local server."""
+    return os.getenv(f"WORKBENCH_MODEL_{role.upper()}") or MODEL
+
+
 # LLM_MODE wins; without it MOCK_LLM=1 means mock and MOCK_LLM=0 means live (back-compat)
 LLM_MODE = _choice("LLM_MODE", os.getenv("LLM_MODE")
                    or ("mock" if os.getenv("MOCK_LLM", "1") == "1" else "live"), LLM_MODES)

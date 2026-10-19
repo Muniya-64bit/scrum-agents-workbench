@@ -75,6 +75,7 @@ class BaseAgent(ABC):
                 mock=lambda: self.mock_output(db, project_id, task),
                 usage=usage,
                 key=key,
+                model=config.model_for(self.role),
             )
         finally:  # replay notes are logged also when the call fails
             if usage.get("replay_drift"):

@@ -175,11 +175,26 @@ sprint story that has code it:
 2. runs them with `workbench/runner.py`: a pytest subprocess in the workspace with a 120 second
    limit and no `ANTHROPIC_API_KEY` in its environment. The workspace is a plain directory, not a
    container, so this guards against accidents rather than hostile code.
-3. files one `Bug` per failing test (no duplicates), and sets QA tasks to `testing` or `done`.
-4. while bugs are open and have attempts left, calls the Developer with `{"story_id": id,
+3. checks the code against the Architect's API contract (see below) and counts a missing endpoint
+   or a wrong success status as a failure named `contract <METHOD> <path>`.
+4. files one `Bug` per failing test or contract failure (no duplicates), and sets QA tasks to
+   `testing` or `done`. A failure caused by the test code itself (a `NameError`, an import error,
+   a collection error) is not a bug in the application: QA rewrites its own tests from the
+   failing output (`tests_revised`) and runs again. If the rewrite changes nothing the loop stops.
+5. while bugs are open and have attempts left, calls the Developer with `{"story_id": id,
    "max_fix_retries": n}` and tests again. The limit is the sprint's `max_fix_retries`
    (`MAX_FIX_RETRIES`, 3, by default) attempts per bug. A bug the Developer marked fixed that
    still fails is reopened; after the limit it stays open for a human.
+
+### API contract
+The Architect's per-story design carries `endpoints`, each with method, path, purpose,
+`request_fields`, `success_status` and `error_statuses` (at least one per story). `workbench/contract.py`
+renders them as an OpenAPI `paths` artifact `API: <story>` (never empty or free text), and the
+Architect sees the endpoints already designed so paths stay consistent. The Developer is told to
+implement exactly these methods, paths, JSON field names and status codes. QA writes its tests
+against the same contract. `contract.violations` checks the code by rules: the routes found in
+`app/*.py` against the contract, ignoring router prefixes. It runs in live mode only, because the mock
+Developer writes no routes.
 
 Every run logs a `test_run` event (`passed`, `failed`, `ok`) for the metrics views.
 `QAAgent(developer=None)` only reports bugs and never reruns the Developer.
@@ -294,7 +309,7 @@ The retrospective changes how the next sprint runs, not only what is written in 
 | Phase | Handler | Output | Artifacts |
 |---|---|---|---|
 | backlog | `SystemDesigner` | `ArchitectureOutput` | `architecture` overview, three `diagram`s (components, data-model, main-flow) and an `api_spec` (OpenAPI 3 YAML), each traced to every backlog story with relation `architecture` |
-| execution | `DesignDelta` | `DesignDeltaOutput` | Per sprint story: `design` notes, optional `diagram` and `api_spec` snippet, traced to that story |
+| execution | `DesignDelta` | `DesignDeltaOutput` | Per sprint story: `design` notes, optional `diagram` and the `api_spec` contract rendered from its `endpoints`, traced to that story |
 
 - Diagrams are raw Mermaid. The schema rejects text that does not start with a Mermaid diagram
   type, so a bad diagram triggers an LLM retry.
