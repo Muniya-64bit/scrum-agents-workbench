@@ -1,8 +1,8 @@
-import { act, screen } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { MockEventSource } from "../test/eventSource";
-import { processInfo, project } from "../test/fixtures";
+import { processInfo, project, sprint, sprintDetail } from "../test/fixtures";
 import { mockApi, renderApp } from "../test/utils";
 
 const backlogRoute = { "GET /projects/1/backlog": { vision: "", epics: [] } };
@@ -28,12 +28,19 @@ describe("phase controls", () => {
     const calls = mockApi({
       ...backlogRoute,
       "GET /projects/1": { ...project, phase: "sprint_planning", awaiting_approval: true },
+      "GET /projects/1/sprints": [sprint],
+      "GET /sprints/5": sprintDetail,
       "POST /projects/1/approve": { ...project, phase: "sprint_planning", awaiting_approval: false },
     });
     renderApp("/projects/1/backlog");
 
     expect(await screen.findByText(/Awaiting your approval: Planning/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Approve" }));
+    // the header does not approve blindly; the card on the page shows what is accepted
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    const card = await screen.findByRole("region", { name: "Planning is waiting for you" });
+    expect(await within(card).findByText("What you are accepting")).toBeInTheDocument();
+    expect(within(card).getByText("Acceptance criteria")).toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: "Approve Planning" }));
     expect(await screen.findByRole("button", { name: "Start Execution" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Approved");
     expect(calls.some((c) => c.method === "POST" && c.path === "/projects/1/approve")).toBe(true);

@@ -2250,3 +2250,64 @@ details[open] > .story-summary::before {
   outline: none;
   box-shadow: var(--focus-ring);
 }
+
+/* ---------- Approval card: what the human is asked to accept ---------- */
+.approval-slot {
+  padding-bottom: 0;
+}
+
+.approval-subtitle {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.approval-stories {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.approval-stories > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.approval-story-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.approval-story-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 14px 14px 34px;
+}
+
+.approval-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.approval-tasks li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.approval-tasks li > span:first-child {
+  flex: 1;
+  min-width: 0;
+}

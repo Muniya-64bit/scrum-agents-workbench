@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 
 import { ActivityFeed } from "../components/ActivityFeed";
-import { ApprovalCard } from "../components/ApprovalCard";
 import { Avatar } from "../components/Avatar";
 import { IconSparkle } from "../components/icons";
 import { Button, EmptyState, Loading } from "../components/ui";
@@ -19,7 +18,7 @@ const STATUS_TEXT: Record<StreamStatus, string> = {
 };
 
 export function ActivityPage() {
-  const { project, events, streamStatus, onProjectChange } = useProject();
+  const { events, streamStatus } = useProject();
   const [actor, setActor] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE);
 
@@ -31,8 +30,6 @@ export function ActivityPage() {
 
   return (
     <div className="page-body">
-      {project.awaiting_approval && <ApprovalCard project={project} onDone={onProjectChange} />}
-
       <div className="feed-toolbar">
         <div className="chips" role="group" aria-label="Filter by agent">
           <button
