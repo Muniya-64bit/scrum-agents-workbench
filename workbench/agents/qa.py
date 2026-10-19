@@ -59,8 +59,9 @@ _TEST_SIDE = re.compile(r"NameError|ImportError|ModuleNotFoundError|SyntaxError|
 
 
 def _code_error(output: str) -> bool:
-    """The traceback runs through the application's own files, so the code is at fault."""
-    return bool(re.search(r"^app/\S+\.py:\d+", output, re.MULTILINE))
+    """The traceback names the application's own files (`app/main.py:37` or, for a syntax
+    error, `File ".../app/main.py", line 37`), so the code is at fault, not the test."""
+    return bool(re.search(r"\bapp/[\w/]+\.py\b", output))
 
 
 def _test_side(f: runner.Failure, output: str = "") -> bool:
@@ -70,8 +71,10 @@ def _test_side(f: runner.Failure, output: str = "") -> bool:
 
 
 def _error_line(output: str) -> str:
-    """The first `E   SomeError: ...` line of pytest's output: the real reason of a failure."""
-    m = re.search(r"^E\s+(.+)$", output, re.MULTILINE)
+    """The `E   SomeError: ...` line of pytest's output that names the real reason."""
+    named = re.search(r"^E\s+(\w*(?:Error|Exception)\b.*)$", output, re.MULTILINE)
+    first = re.search(r"^E\s+(.+)$", output, re.MULTILINE)
+    m = named or first
     return m.group(1).strip()[:200] if m else ""
 
 

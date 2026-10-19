@@ -224,6 +224,19 @@ def test_an_error_in_the_application_goes_to_the_developer_not_to_a_test_rewrite
     assert "NameError" in bug.description  # the real reason reaches the Developer
 
 
+def test_a_syntax_error_in_app_code_is_the_developers_bug(
+        db: Session, project: m.Project, coded: m.UserStory, monkeypatch):
+    """pytest shows a syntax error with the file's full path, not as an `app/x.py:3` frame."""
+    Workspace(project.id).write(f"app/features/story_{coded.id}.py", "def f(a=1, b):\n    pass\n")
+    developer = DeveloperAgent(_fake_llm(monkeypatch, _fix_reply(coded, "Create an item")))
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "Create an item"))
+    QAAgent(qa_llm, developer=developer).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "tests_revised" not in kinds and "tests_revision_unchanged" not in kinds
+    (bug,) = repo.bugs(db, project.id)
+    assert "SyntaxError" in bug.description
+
+
 def test_an_unchanged_rewrite_stops_the_loop(db: Session, project: m.Project,
                                              coded: m.UserStory, monkeypatch):
     llm = _fake_llm(monkeypatch, _broken_tests(coded), _broken_tests(coded))
