@@ -11,9 +11,10 @@ ceremonies.
 
 > **Status:** All six agents are implemented and run end to end (idea to release, several sprints)
 > with a REST API, a web UI, GQM metrics, traceability, a retrospective that changes the process,
-> a scripted offline demo and a CI coverage gate. Live runs against the real model have not been
-> exercised end to end; open work is tracked in the
-> [issues](https://github.com/Muniya-64bit/scrum-agents-workbench/issues).
+> a scripted offline demo and a CI coverage gate. Live runs have used a local model through Ollama;
+> the pipeline completes, but a 14B model delivers only part of a small backlog (see
+> [Live results](#live-results)). The Claude API path has not been run end to end. Open work is
+> tracked in the [issues](https://github.com/Muniya-64bit/scrum-agents-workbench/issues).
 
 ## Contents
 - [Features](#features)
@@ -25,6 +26,7 @@ ceremonies.
 - [Developing an agent](#developing-an-agent)
 - [Demo](#demo)
 - [Testing and linting](#testing-and-linting)
+- [Live results](#live-results)
 - [Roadmap](#roadmap)
 - [Team and workflow](#team-and-workflow)
 - [Documentation](#documentation)
@@ -36,10 +38,18 @@ ceremonies.
 - Explicit process model (roles, product flow, entry/exit criteria, RACI) that drives the
   orchestrator and generates the [process handbook](docs/process-handbook.md)
 - Non-functional requirements with measurable targets, and a rule-based backlog quality check
-- Traceability matrix story → design → code → tests with an artifact viewer
-- Metrics dashboard (GQM): burndown, velocity, quality, AI cost
-- Retrospective levers that change the next sprint, a versioned release per sprint and a
-  Plan-Do-Check-Act view of the improvement
+- **Runs on the Claude API or a local model** (Ollama), with a model per agent role
+- **A structured API contract**: the Architect's endpoints per story are read by the Developer and
+  QA, and QA checks the code against them
+- **Guards on model-written work**: code that drops endpoints or cannot run is refused and retried,
+  QA corrects a test that is itself wrong, and every test run starts from a fresh database
+- **Planner rules** that keep a sprint moving: stuck stories are parked, spare capacity is filled,
+  a capacity cut is limited, and only the agents that close tasks are given tasks
+- Traceability matrix story → design → code → tests with an artifact viewer, and every sprint a
+  story was planned into
+- **Results page**: a verdict first, every sprint side by side, what the team did, quality, cost,
+  releases and a Plan-Do-Check-Act view of the improvement
+- Retrospective levers that change the next sprint, and a versioned release per sprint
 - Schema-validated agent output with retries, response caching and token usage logging
 - Mock mode (`MOCK_LLM=1`) so development and tests cost no tokens, plus record/replay of LLM
   answers keyed by meaning (`LLM_MODE`)
@@ -56,7 +66,8 @@ flowchart LR
   ORCH --> AG[Agents<br/>PO, SM, Architect,<br/>Developer, QA, DevOps]
   AG -->|Tools API| DB[(SQLite)]
   AG --> LLM[LLMClient]
-  LLM --> CLAUDE[Claude API]
+  LLM -->|anthropic| CLAUDE[Claude API]
+  LLM -->|ollama| OLLAMA[Local Ollama]
   AG --> WS[Sandbox workspace + git]
   API --> DB
 ```
@@ -163,21 +174,28 @@ To use the real model, set `ANTHROPIC_API_KEY` and `MOCK_LLM=0` in `.env`.
 No API key or cloud account is needed. Install [Ollama](https://ollama.com), pull a model and set
 these in `.env`:
 ```bash
-ollama pull qwen2.5:14b      # about 9 GB; use qwen2.5:7b on a smaller GPU
+ollama pull qwen2.5:14b          # about 9 GB; use qwen2.5:7b on a smaller GPU
+ollama pull qwen2.5-coder:14b    # optional: a code model for the Developer and QA
 ```
 ```
 MOCK_LLM=0
 LLM_PROVIDER=ollama
 WORKBENCH_MODEL=qwen2.5:14b
+WORKBENCH_MODEL_DEVELOPER=qwen2.5-coder:14b
+WORKBENCH_MODEL_QA=qwen2.5-coder:14b
 LLM_PRICE_INPUT_PER_MTOK=0
 LLM_PRICE_OUTPUT_PER_MTOK=0
 ```
-The client sends each agent's JSON schema to Ollama as `format`, so the model can only answer in
-the shape the agent expects. Calls are slow compared with the Claude API; a run takes minutes per
-phase. A code model suits the agents that write code and tests: set
-`WORKBENCH_MODEL_DEVELOPER` and `WORKBENCH_MODEL_QA` to `qwen2.5-coder:14b`. Models under about 7B parameters often fail the schemas. Use `make run`, which reloads only
-when `workbench/` changes. Plain `uvicorn --reload` also watches `workspaces/`, where the agents
-write code, and restarts the API in the middle of a phase.
+- The client sends each agent's JSON schema to Ollama as `format`, so the model can only answer in
+  the shape the agent expects.
+- `WORKBENCH_MODEL_<ROLE>` gives one agent its own model, so a code model can write the code and
+  the tests while a general model does the rest.
+- Calls are slow compared with the Claude API: a phase takes minutes, and a whole project with
+  three sprints took from 4 to 16 minutes on a 16 GB GPU.
+- Models under about 7B parameters often fail the schemas.
+- Start the API with `make run`, which reloads only when `workbench/` changes. A plain
+  `uvicorn --reload` also watches `workspaces/`, where the agents write code, and restarts the API
+  in the middle of a phase.
 
 ### Web UI
 Requires Node.js 22. Keep `make run` going in one terminal, then in another:
@@ -186,8 +204,10 @@ make ui-setup   # npm ci in frontend/
 make seed       # optional: a demo project with a backlog and a sprint board
 make ui         # http://localhost:5173
 ```
-The UI has a project list, the backlog, a Kanban sprint board, a live agent activity feed and an
-approval inbox for the sprint planning and review gates. See [docs/frontend.md](docs/frontend.md).
+The UI has a project list, the backlog, a Kanban sprint board, a live agent activity feed, an
+approval inbox, a traceability matrix and a Results page. At a gate, the approval card on every
+page lists each story with its acceptance criteria and tasks, so you see what you accept. See
+[docs/frontend.md](docs/frontend.md).
 
 ## Configuration
 Set in `.env` (copy from `.env.example`).
@@ -234,14 +254,22 @@ Full reference with examples: [docs/api.md](docs/api.md).
 ## Project structure
 ```
 workbench/
-  api/            FastAPI app
+  api/            FastAPI app, response models, the event stream
   agents/         BaseAgent, Tools API, registry (one module per real agent)
   db/             SQLAlchemy models, session, repository helpers
-  llm/            LLMClient: validation, retries, cache, mock / record / replay modes
+  llm/            LLMClient: providers, validation, retries, cache, mock / record / replay modes
   orchestrator/   Scrum state machine
+  process_model.py  The process as data: roles, flow, entry and exit criteria, RACI
+  process.py      Sprint levers (capacity, fix retries, test-first) and the retro advisor
+  contract.py     The Architect's API contract: render, parse, check the code against it
+  staticcheck.py  Undefined names and syntax errors in model-written code
+  workspace.py    One sandbox directory and git repository per project
+  runner.py       Runs the generated project's tests on a fresh database
+  requirements.py Non-functional requirements and the backlog quality check
+  metrics.py      GQM metrics, burndown and traceability, from the event log
   schemas.py      Shared agent output contracts
 tests/            pytest suite
-docs/             Architecture and Scrum process evidence
+docs/             Architecture, Scrum process evidence, reference
 frontend/         Web UI (React + Vite)
 scripts/          Demo runner (demo.py), scenario key lister, seed and sample scripts
 demo/scenarios/   Scripted demo scenarios (LLM answers as JSON)
@@ -269,8 +297,27 @@ make cov     # pytest with the coverage gate (total line coverage must stay at 9
 make lint    # ruff
 ```
 CI runs lint, the tests with the coverage gate (`--cov-fail-under=95`) and the frontend checks on
-every pull request. Coverage is about 98% of `workbench/` today; the orchestrator, the Tools API,
-the base agent, the metrics engine and the release step are above 95%.
+every pull request. There are about 360 backend tests and 160 front-end tests, and coverage is
+about 99% of `workbench/` today.
+
+## Live results
+What the pipeline delivers depends on the model. These are runs of the same project (a library
+lending API, a backlog of 6 stories and 19 points) on a local 14B model through Ollama, a code model
+for the Developer and QA and a general model for the rest. The runs below all reached the end (idea
+to release); the table is how much of the backlog passed its tests.
+
+| State of the system | Stories done | Points delivered |
+|---|---|---|
+| Before the guards and the planner fixes | 0 of 6 | 0 |
+| Tasks assigned only to the agents that close them | 1 of 6 | 5 |
+| Latest runs (QA corrects wrong tests, stuck stories parked, fresh database) | 1 to 2 of 6 | 3 to 5 |
+
+Points did not climb steadily: run-to-run variation is large, and three or four runs cannot
+separate a real change from noise. What changed is how the team behaves: later sprints keep testing
+and fixing instead of idling, five of six stories are now attempted (two before), and a story with a
+wrong test can finish. The bugs that remain are mostly the Developer and QA disagreeing on what a
+request looks like. The scripted demo above is hand-written and shows the process, not a model's
+output. How the checks work is in [docs/architecture.md](docs/architecture.md).
 
 ## Roadmap
 Three one-day sprints. See the issue labels `day-1`, `day-2` and `day-3`.

@@ -1,36 +1,68 @@
 # Architecture
 
 ## Purpose
-The workbench takes a product idea through the SDLC using LLM agents that play Scrum roles.
-Agents work in sprints, store everything in a shared database, and pause for human approval at
-the sprint planning and sprint review ceremonies.
+The workbench takes a product idea through the software life cycle with LLM agents that play Scrum
+roles: requirements, design, code, tests and a release for every sprint. Agents work in sprints,
+store everything in a shared database, and pause for human approval at the sprint planning and
+sprint review ceremonies. The model behind the agents can be the Claude API or a local model served
+by Ollama.
 
 ## Components
 ```mermaid
 flowchart LR
-  UI[Web UI] -->|REST| API[FastAPI]
-  API --> ORCH[Orchestrator]
-  ORCH --> AG[Agents]
+  UI[Web UI] -->|REST / SSE| API[FastAPI]
+  API --> ORCH[Orchestrator<br/>Scrum state machine]
+  ORCH --> AG[Agents<br/>PO, SM, Architect,<br/>Developer, QA, DevOps]
   AG -->|Tools API| DB[(SQLite)]
   AG --> LLM[LLMClient]
-  LLM --> CLAUDE[Claude API]
+  LLM -->|provider = anthropic| CLAUDE[Claude API]
+  LLM -->|provider = ollama| OLLAMA[Local Ollama server]
   AG --> WS[Sandbox workspace + git]
+  WS --> RUN[pytest runner<br/>static check]
   API --> DB
 ```
 
 | Component | Location | Responsibility |
 |---|---|---|
-| API | `workbench/api/main.py` | HTTP interface, input validation, error mapping |
-| Orchestrator | `workbench/orchestrator/engine.py` | Phase order, approval gates, deciding which agents run |
-| Agents | `workbench/agents/` | One class per Scrum role; turn project state into LLM prompts and apply results |
+| API | `workbench/api/main.py`, `views.py`, `sse.py` | HTTP interface, input validation, error mapping, the event stream |
+| Orchestrator | `workbench/orchestrator/engine.py` | Phase order, approval gates, which agents run in which phase |
+| Process model | `workbench/process_model.py` | The process as data: roles, product flow, entry and exit criteria, RACI. It drives the orchestrator and generates `docs/process-handbook.md` |
+| Process levers | `workbench/process.py` | The sprint's `ProcessConfig` (capacity, fix retries, test-first, working agreements) and the rule-based advisor behind the retrospective |
+| Agents | `workbench/agents/` | One class per Scrum role; turn project state into LLM prompts and apply the results |
 | Tools API | `workbench/agents/tools.py` | The only way agents change state; every call writes an Event |
-| LLM client | `workbench/llm/client.py` | Calls Claude, validates JSON against a schema, retries, caches; mock, record and replay modes |
+| LLM client | `workbench/llm/client.py` | Providers, JSON-schema validation, retries, cache, usage log; mock, live, record and replay modes |
+| API contract | `workbench/contract.py` | The Architect's endpoints per story: render, parse, and check the code against them |
+| Static check | `workbench/staticcheck.py` | Undefined names and syntax errors in model-written code, by `ruff`, before it is written |
+| Workspace | `workbench/workspace.py` | One directory and git repository per project; path safety |
+| Test runner | `workbench/runner.py` | Runs the generated project's tests in a subprocess with a time limit and a fresh database |
+| Requirements | `workbench/requirements.py` | Non-functional requirements and the rule-based backlog quality check |
+| Metrics | `workbench/metrics.py` | GQM metrics, burndown and traceability details, computed from the event log and the project's records |
 | Data layer | `workbench/db/` | SQLAlchemy models, sessions, query helpers |
 | Contracts | `workbench/schemas.py` | Pydantic models for agent outputs |
 
-The web UI (`frontend/`, React + Vite) shows projects, the backlog, the sprint board, a live
-activity feed and an approval inbox, and drives the phases through the REST API. The API streams
-the event log to clients as Server-Sent Events (`workbench/api/sse.py`).
+The web UI (`frontend/`, React + Vite) has a project list, the backlog, the sprint board, a live
+activity feed, an approval inbox, a traceability matrix and a Results page, and drives the phases
+through the REST API. The API streams the event log to clients as Server-Sent Events.
+
+## LLM client
+Every agent calls `LLMClient.complete_json(system, user, schema, ...)` and gets back a validated
+pydantic object. Invalid JSON is retried with the validation error in the next prompt.
+
+**Providers** (`LLM_PROVIDER`, used when a call is live):
+
+| Provider | How it is called |
+|---|---|
+| `anthropic` (default) | The Anthropic SDK; needs `ANTHROPIC_API_KEY` |
+| `ollama` | `POST /api/chat` to a local server with the agent's JSON schema as `format`, so the model can only answer in the shape the agent expects. No key needed. `OLLAMA_NUM_CTX` sets the context window, because Ollama's default truncates long prompts |
+
+**Modes** (`LLM_MODE`): `mock` (canned answers, no calls; the default for development and CI),
+`live` (a real call, answers cached by prompt), `record` (live, and every answer saved under a key
+that names the call by meaning) and `replay` (answers read back from a scenario folder). The
+scripted demo is a replay of hand-written answers.
+
+**A model per role.** `WORKBENCH_MODEL_<ROLE>` overrides `WORKBENCH_MODEL` for one agent, for
+example a code model for the Developer and QA and a general model for the rest. The model of a call
+travels in a context variable, so the override never leaks into the next call.
 
 ## State machine
 Gates pause the run until a human calls the approve endpoint.
@@ -40,6 +72,7 @@ stateDiagram-v2
   [*] --> idea
   idea --> backlog
   backlog --> sprint_planning
+  sprint_planning --> sprint_planning: human rejects (plan again)
   sprint_planning --> execution: human approves
   execution --> review
   review --> retro: human approves
@@ -49,12 +82,13 @@ stateDiagram-v2
   done --> [*]
 ```
 
-The loop edge is `Orchestrator.next_phase`: after `release` it returns to `sprint_planning` while
-`more_sprints` holds (a story that fits the next capacity is unplanned and fewer than
-`MAX_SPRINTS` sprints ran). `run_to_end` stops with an error after 200 steps. `ProjectView.
-has_more_sprints` tells the UI which button label to show at the release.
+The loop edges are in `Orchestrator.next_phase`: after `release` it returns to `sprint_planning`
+while `more_sprints` holds (a story fits the next capacity and fewer than `MAX_SPRINTS` sprints
+ran), and a rejected sprint plan is planned again. Rejecting the review is passed on to the
+retrospective, which has to respond to the reason. `run_to_end` stops with an error after 200
+steps.
 
-`PHASE_AGENTS` in `engine.py` maps each phase to the agent roles that run in it:
+`PHASE_AGENTS` in `engine.py` is built from the process model:
 
 | Phase | Agents |
 |---|---|
@@ -65,13 +99,67 @@ has_more_sprints` tells the UI which button label to show at the release.
 | retro | scrum_master |
 | release | devops |
 
-Roles without a registered agent fall back to `StubAgent`, which logs and does nothing.
+Roles without a registered agent fall back to `StubAgent`, which logs and does nothing. The release
+phase runs `ReleaseAgent`, which wraps the DevOps agent and ends every sprint with a versioned
+release: notes in `releases/v0.N.0.md`, a git tag in the sandbox repository, a `release` artifact
+traced to the completed stories and a `release_created` event.
 
-The release phase runs `ReleaseAgent`, which wraps the DevOps agent and ends every sprint with
-a versioned release: notes in `releases/v0.N.0.md`, a git tag in the sandbox repository, a
-`release` artifact traced to the completed stories and a `release_created` event (docs/agents.md,
-"Release step"). Artifacts of kind `release` therefore include the DevOps files and one
-`Release vX.Y.Z` notes artifact per sprint.
+## How the agents work together
+The agents do not talk to each other. They interact through the shared database and event log, an
+API contract, and one direct call: QA asks the Developer to fix a bug.
+
+```mermaid
+sequenceDiagram
+  participant A as Architect
+  participant D as Developer
+  participant Q as QA
+  participant W as Workspace
+  A->>A: design per story, with API endpoints (the contract)
+  A-->>D: contract artifact (paths, fields, status codes)
+  A-->>Q: the same contract
+  D->>W: code (refused if it drops routes or cannot run)
+  Q->>W: tests written against the contract
+  Q->>W: run tests on a fresh database, check routes against the contract
+  alt a test fails
+    Q->>D: bug fix request, in the same sprint
+    D->>W: fix
+    Q->>Q: after two failed fixes: is the test itself wrong?
+  end
+  Q-->>Q: story done when its tasks are done
+```
+
+A story is done when all its tasks are done. Only the Developer (on a commit) and QA (when the
+tests pass) close tasks, so the Scrum Master may assign tasks only to `developer` and `qa`, and
+every story gets one task for each.
+
+### Guards on model-written work
+A small model makes the same mistakes again and again. These checks are plain code, not prompts,
+so they hold whatever the model answers.
+
+| Guard | What it stops | Where |
+|---|---|---|
+| Structured API contract | An empty or free-form spec. The Architect returns endpoints (method, path, request fields, status codes) that are rendered into the spec | `contract.render`, `schemas.EndpointOut` |
+| Contract check | A route the contract names that the code lacks, or a wrong success status, found by reading the routes in `app/*.py`. Becomes a bug for the Developer | `contract.violations`, QA |
+| Route guard | A rewrite of `main.py` that drops endpoints other stories use. The answer is refused and the Developer retries (up to two more times) with the removed endpoints named. A route moved behind a router prefix is not a removal | `contract.lost`, Developer |
+| Static check | Undefined names and syntax errors, refused before they are written. The offending source line is shown to the model | `staticcheck.problems`, Developer |
+| Path normalization | A path such as `/tests/x.py` rejected as unsafe; a leading slash means the repository root. Absolute paths stay rejected by the workspace | `workspace.repo_path` |
+| Fresh database | A test run against an old SQLite file, which kept an old schema (`no such column`). Leftover `*.db`, `*.sqlite`, `*.sqlite3` files are deleted before each run | `runner.clear_databases` |
+| Tables at import time | Tables created only in a startup event, which `TestClient(app)` does not run. The Developer creates them at module level and QA's tests use `with TestClient(app)` | prompts |
+| Test or code? | A crash of the test code (a missing import) is a mistake of the test: QA rewrites it. An error that runs through `app/` is a bug for the Developer | `qa._test_side` |
+| Test correction | A wrong test the Developer can never satisfy, such as one that asserts the exact text of an error message. After two failed Developer attempts QA checks the test against the contract and corrects it | `QAAgent._revise_tests(review=True)` |
+
+## Sprint planning rules
+The model proposes a sprint and the code decides (`scrum_master.plan_stories`), so a bad answer
+cannot produce an empty or stuck sprint:
+
+- Unknown or duplicate story ids and anything over the capacity are dropped.
+- A story carried over twice with a bug still open is **blocked**: it is planned after other work,
+  and only if room is left.
+- The sprint is **topped up** by priority until the capacity is full. A plan the human rejected as
+  too big is not topped up.
+- One retrospective may lower the capacity by at most **30%**.
+- A carried-over story gets its fix attempts **reset** when it is planned again. The Developer's
+  prompt says how many earlier attempts failed and asks for a different approach.
 
 ## Process improvement loop
 Each sprint is one Plan-Do-Check-Act cycle. The retrospective turns measured results into typed
@@ -97,20 +185,24 @@ The same loop is the Quality Improvement Paradigm (QIP) from the course:
 | Analyze | Review and `sprint_metrics`, then the retrospective |
 | Package | The retro's changes stored in `Sprint.retro` and recorded in the next `sprint_planned.process` |
 
-The Metrics page shows the cycle for every sprint (`GET /projects/{id}/improvement`): Plan is the
-process in `sprint_planned`, Do is committed vs completed points, Check the metrics with their
-change since the previous sprint, Act the retro's proposal.
-
-Unfinished stories return to the backlog at the retro (`story_carried_over`) and are planned first.
-The levers and their bounds are in docs/agents.md. Agents read the sprint's process from the
-database, so no lever needs the orchestrator:
+Unfinished stories return to the backlog at the retro (`story_carried_over`). The levers and their
+bounds are in docs/agents.md. Agents read the sprint's process from the database, so no lever needs
+the orchestrator:
 
 | Lever | Read by | Effect |
 |---|---|---|
-| `capacity` | Scrum Master planning | Points the sprint may commit to |
+| `capacity` | Scrum Master planning | Points the sprint may commit to; a cut is limited to 30% |
 | `max_fix_retries` | Developer, QA | Fix attempts per bug; QA's test/fix loop length |
 | `test_first` | Developer, QA | QA writes the tests before the Developer codes; QA also runs stories whose tests never ran |
 | `guidelines` | `BaseAgent.run` (all agents but the Product Owner) | Working agreements appended to the prompt |
+
+## Results
+`GET /projects/{id}/metrics` returns the GQM metrics for every sprint, computed from the event log
+and the project's records. The **Results** page opens with a verdict (Complete, In progress, Nothing delivered) and the
+points and stories delivered, then shows every sprint side by side (planned against completed, and
+what the team did when it completed nothing), one sprint in focus with its burndown, quality, cost,
+releases and the Plan-Do-Check-Act cards. The rules behind the wording are pure functions in
+`frontend/src/lib/results.ts`. See docs/frontend.md and docs/metrics.md.
 
 ## Data model
 ```mermaid
@@ -127,21 +219,37 @@ erDiagram
   ARTIFACT ||--o{ TRACE_LINK : linked_in
 ```
 
-- `UserStory.acceptance_criteria` is a list of Given/When/Then strings. QA turns these into tests.
-- `TraceLink` ties a story to the artifacts (design, code, test) that satisfy it.
-- `Event` is append-only. It is the source for the activity feed and for report metrics.
+- `UserStory.acceptance_criteria` is a list of Given/When/Then strings, at least two per story. QA
+  turns these into tests.
+- `TraceLink` ties a story to the artifacts (design, API contract, code, test, release) that
+  satisfy it. `GET /projects/{id}/traceability` also returns every sprint a story was planned into.
+- `Event` is append-only. It is the source for the activity feed and for most metrics.
 
 ## Design decisions
 | Decision | Reason |
 |---|---|
 | Agents change state only through `Tools` | One audit trail, and no free text written to the database |
 | Agent output is validated against a pydantic schema | Bad LLM output is retried or rejected instead of corrupting state |
+| The model proposes, the code decides | Sprint plans, task owners and the acceptance of code are checked by rules; a small model's mistakes cannot stall the process |
+| A structured contract between Architect, Developer and QA | The three agents agree on paths, fields and status codes, and the contract can be checked by code |
+| Providers behind one client | The same agents run on the Claude API or a local model, with a model per role |
 | `MOCK_LLM=1` by default | Development and CI cost nothing and are deterministic |
 | SQLite | No setup for a three-day project; models are portable to Postgres |
 | Agents registered by role in one dict | Teammates add agents without editing the orchestrator |
+| The process is data (`process_model.py`) | The handbook, the entry and exit checks and the orchestrator come from one source |
 
 ## Known limitations
-- Rejecting an approval (`approved=false`) clears the gate and logs the rejection, but does not
-  re-run the phase yet.
-- Real Claude calls have not been exercised end to end; the code path is covered only in mock mode.
-- There is no authentication. Run it locally only.
+- **Live delivery is limited by the model.** On a local 14B model the library project delivered
+  between 0 and 2 of 6 stories (0 to 5 of 19 points) in the latest runs. The agents and guards work,
+  but the Developer and QA still disagree on request shapes (a `422` where `201` was expected) often
+  enough to block stories. Run-to-run variation is large.
+- The Claude API path is covered in tests and mock mode but has not been run end to end; the live
+  runs used Ollama.
+- The scripted demo is hand-written, not a model run. What is real in it is the generated code, the
+  test runs, the git history and every number on the Results page.
+- Tests are API tests written by QA. There are no integration, end-to-end or UI tests, and the
+  non-functional requirements are written and designed for but not verified.
+- The DevOps agent writes a Dockerfile and a CI workflow, but the image is built only where Docker is
+  usable (it is skipped without Docker and failed on the test server for lack of permission).
+- There is no maintenance flow after a release, and no backlog refinement event.
+- There is no authentication. Run it locally or behind an SSH tunnel.
