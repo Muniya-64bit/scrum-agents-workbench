@@ -100,7 +100,7 @@ the sprint. The retrospective is told the reason and must answer it in `went_wro
 | # | Phase | Activity | Purpose | Responsible | Agents | Gate |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `backlog` | Requirements and sprint-0 design | Turn the product idea into a validated product backlog and a first architecture. | Product Owner | Product Owner, Architect | - |
-| 2 | `sprint_planning` | Sprint planning | Choose the stories for the sprint within capacity and split them into tasks. | Scrum Master | Scrum Master | Human approval |
+| 2 | `sprint_planning` | Backlog refinement and sprint planning | Refine the backlog stories that failed the quality check, then choose the stories for the sprint within capacity and split them into tasks. | Scrum Master | Product Owner, Scrum Master | Human approval |
 | 3 | `execution` | Sprint execution | Design, build and test each sprint story until it meets the Definition of Done. | Developer | Architect, Developer, QA | - |
 | 4 | `review` | Sprint review | Show the increment and its progress so the human can accept or reject it. | Scrum Master | Scrum Master | Human approval |
 | 5 | `retro` | Sprint retrospective | Inspect the sprint's measured results and adapt the process for the next one. | Scrum Master | Scrum Master | - |
@@ -111,7 +111,7 @@ the sprint. The retrospective is told the reason and must answer it in `went_wro
 | Activity | Consumes | Produces |
 | --- | --- | --- |
 | Requirements and sprint-0 design | Product idea | Product vision, Epics and user stories, Non-functional requirements, Backlog quality report, Architecture overview, Diagrams, API spec |
-| Sprint planning | Epics and user stories, Process levers, Retrospective actions, Rejection reason (when re-planning) | Sprint goal, Sprint backlog, Tasks |
+| Backlog refinement and sprint planning | Epics and user stories, Backlog quality report, Process levers, Retrospective actions, Rejection reason (when re-planning) | Refined stories, Sprint goal, Sprint backlog, Tasks |
 | Sprint execution | Sprint backlog, Tasks, Architecture overview, Acceptance criteria, Non-functional requirements | Story designs, Code, Tests, Bug reports |
 | Sprint review | Code, Tests, Tasks, Bug reports | Stand-up summary, Burndown snapshot |
 | Sprint retrospective | Sprint metrics, Review feedback, Process levers | Retrospective, Process changes |
@@ -124,7 +124,7 @@ R = responsible (does the work), A = accountable (decides), C = consulted, I = i
 | Activity | Human (stakeholder) | Product Owner | Scrum Master | Architect | Developer | QA | DevOps |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Requirements and sprint-0 design | C | R/A | I | R | I | I | I |
-| Sprint planning | A | C | R | I | C | C | I |
+| Backlog refinement and sprint planning | A | R | R | I | C | C | I |
 | Sprint execution | I | C | C | R | R/A | R | I |
 | Sprint review | A | C | R | I | I | I | I |
 | Sprint retrospective | I | C | R/A | C | C | C | C |
@@ -135,7 +135,7 @@ R = responsible (does the work), A = accountable (decides), C = consulted, I = i
 | Activity | Entry criteria | Exit criteria |
 | --- | --- | --- |
 | Requirements and sprint-0 design | The project has a product idea | The backlog has at least one story<br>Every story has acceptance criteria<br>A sprint-0 architecture exists |
-| Sprint planning | The backlog has stories not yet in a sprint | The sprint has at least one story<br>Every sprint story has tasks<br>Committed points do not exceed the capacity |
+| Backlog refinement and sprint planning | The backlog has stories not yet in a sprint | The sprint has at least one story<br>Every sprint story has tasks<br>Committed points do not exceed the capacity |
 | Sprint execution | An active sprint has at least one story | Every sprint story has tests<br>No sprint story has an open bug<br>Every sprint story is done (all tasks done) |
 | Sprint review | A sprint has been planned | A burndown snapshot is recorded for the sprint |
 | Sprint retrospective | A sprint has been planned | The retrospective is saved |

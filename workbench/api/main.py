@@ -1,11 +1,12 @@
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import metrics, process, process_model, requirements
+from workbench import config, export, metrics, process, process_model, requirements
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
 from workbench.api.sse import event_stream, event_view
@@ -20,10 +21,12 @@ from workbench.api.views import (
     EpicView,
     EventView,
     ImprovementRow,
+    MaintenanceIn,
     NfrView,
     ProcessView,
     ProjectMetricsView,
     ProjectView,
+    ReleaseCheckView,
     ReleaseView,
     SprintDetailView,
     SprintView,
@@ -47,6 +50,21 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Scrum Agents Workbench", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    """With WORKBENCH_API_TOKEN set, everything but /health needs the token, as a bearer token or
+    as `?token=` (a browser EventSource cannot send headers)."""
+    token = config.API_TOKEN
+    if token and request.url.path != "/health" and request.method != "OPTIONS":
+        header = request.headers.get("authorization", "")
+        given = header.removeprefix("Bearer ").strip() or request.query_params.get("token", "")
+        if not secrets.compare_digest(given.encode(), token.encode()):
+            return JSONResponse(status_code=401,
+                                content={"detail": "A valid API token is required"},
+                                headers={"WWW-Authenticate": "Bearer"})
+    return await call_next(request)
 
 DESIGN_KINDS = {"architecture", "diagram", "api_spec", "design"}
 
@@ -139,6 +157,18 @@ def approve(project_id: int, approved: bool = True, comment: str = "",
     _proj(db, project_id)
     try:
         return _view(db, Orchestrator(db, AGENTS).approve(project_id, approved, comment))
+    except RuntimeError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@app.post("/projects/{project_id}/maintenance", response_model=ProjectView)
+def request_maintenance(project_id: int, body: MaintenanceIn, db: Session = Depends(get_session)):
+    """Report a problem found after the release. It becomes a top-priority fix story, and the next
+    `advance` plans a maintenance sprint. 409 unless the project is finished."""
+    _proj(db, project_id)
+    try:
+        return _view(db, Orchestrator(db, AGENTS).request_maintenance(
+            project_id, body.title, body.description, body.points))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 
@@ -249,6 +279,17 @@ def releases(project_id: int, db: Session = Depends(get_session)):
     return out
 
 
+@app.get("/projects/{project_id}/release-checks", response_model=list[ReleaseCheckView])
+def release_check_list(project_id: int, db: Session = Depends(get_session)):
+    """The checks of every release (app starts, serves its contract, requirements, security),
+    oldest release first. Empty for runs that do not make them (mock mode)."""
+    _proj(db, project_id)
+    return [ReleaseCheckView(version=e.payload.get("version", ""),
+                             sprint_id=e.payload.get("sprint_id"), name=e.payload.get("name", ""),
+                             status=e.payload.get("status", ""), detail=e.payload.get("detail", ""))
+            for e in repo.events_since(db, project_id) if e.kind == "release_check"]
+
+
 @app.get("/projects/{project_id}/process", response_model=ProcessView)
 def process_view(project_id: int, db: Session = Depends(get_session)):
     """The process in force now, and the one the next sprint will use (retro changes applied)."""
@@ -285,6 +326,24 @@ def improvement(project_id: int, db: Session = Depends(get_session)):
 def project_metrics(project_id: int, db: Session = Depends(get_session)):
     _proj(db, project_id)
     return ProjectMetricsView.model_validate(metrics.project_metrics(db, project_id))
+
+
+# --- Export -----------------------------------------------------------------------------------
+
+@app.get("/projects/{project_id}/report", response_class=PlainTextResponse)
+def project_report(project_id: int, db: Session = Depends(get_session)):
+    """A Markdown report of the project: requirements, backlog, every sprint, releases, bugs."""
+    _proj(db, project_id)
+    return PlainTextResponse(export.report(db, project_id), media_type="text/markdown")
+
+
+@app.get("/projects/{project_id}/export")
+def project_export(project_id: int, db: Session = Depends(get_session)):
+    """A zip of the report and the generated project (code, tests, release notes)."""
+    p = _proj(db, project_id)
+    return Response(export.archive(db, project_id), media_type="application/zip",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{export.filename(p)}.zip"'})
 
 
 # --- Activity feed ----------------------------------------------------------------------------

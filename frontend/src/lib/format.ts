@@ -58,3 +58,8 @@ export function duration(seconds: number): string {
   if (total < 60) return `${total}s`;
   return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, "0")}s`;
 }
+
+/** A file name stem from a project name: "Todo app" -> "todo-app". */
+export function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
+}

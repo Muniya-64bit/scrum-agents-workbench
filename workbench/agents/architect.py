@@ -203,6 +203,10 @@ Rules:
                                      story_id=story.id, path=f"{base}.mmd")
             tools.write_artifact("api_spec", f"API: {story.title}", contract.render(d.endpoints),
                                  story_id=story.id, path=f"{base}.yaml")
+            endpoints = ", ".join(f"{e.method} {e.path}" for e in d.endpoints)
+            for reader in ("developer", "qa"):
+                tools.message(reader, f"API contract for story #{story.id}: {story.title}",
+                              endpoints, story_id=story.id)
         for story in pending.values():
             tools.log("design_missing", story.title, story_id=story.id)
 

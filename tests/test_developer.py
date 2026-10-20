@@ -320,6 +320,38 @@ def test_prompt_says_how_many_earlier_attempts_failed(db: Session, project: m.Pr
     assert "change your approach" in again
 
 
+def test_nul_characters_are_removed_before_a_file_is_written(db: Session, project: m.Project,
+                                                           monkeypatch):
+    """A live model put NUL bytes into app/main.py, so Python refused the whole file."""
+    dirty = _main("from fastapi import FastAPI\x00\napp = FastAPI()\x00\n")
+    DeveloperAgent(_fake_llm(monkeypatch, dirty)).run(db, project.id, EXECUTION)
+    text = Workspace(project.id).read("app/main.py")
+    assert "\x00" not in text and text == "from fastapi import FastAPI\napp = FastAPI()\n"
+    assert "code_rejected" not in _kinds(db, project.id)  # cleaned, not refused
+    (event,) = [e for e in repo.events_since(db, project.id) if e.kind == "file_cleaned"]
+    assert event.message == "Removed NUL characters from app/main.py"
+    artifact = repo.artifacts(db, project.id, "code")[-1]
+    assert "\x00" not in artifact.content
+
+
+def test_code_that_imports_a_module_that_is_not_installed_is_refused_and_retried(
+        db: Session, project: m.Project, monkeypatch):
+    """A live model imported `validators`; every test of the story then failed at import and the
+    Developer kept returning the same import."""
+    bad = _main("import validators\nfrom fastapi import FastAPI\napp = FastAPI()\n")
+    good = _main("from urllib.parse import urlparse\nfrom fastapi import FastAPI\n"
+                 "app = FastAPI()\n")
+    llm = _fake_llm(monkeypatch, bad, good)
+    prompts: list[str] = []
+    real_call = llm._call
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: (
+        prompts.append(prompt), real_call(system, prompt, stats))[1])
+    DeveloperAgent(llm).run(db, project.id, EXECUTION)
+    assert _kinds(db, project.id).count("code_rejected") == 1
+    assert "the module 'validators' is not installed here" in prompts[1]
+    assert "urllib.parse" in Workspace(project.id).read("app/main.py")
+
+
 def test_story_id_task_builds_that_story_only(db: Session, project: m.Project):
     other = _story(db, project, "Delete an item")  # not in a sprint, but asked for directly
     DeveloperAgent().run(db, project.id, {**EXECUTION, "story_id": other.id})

@@ -6,6 +6,7 @@ import type { ActivityEvent, ProcessInfo, Project } from "../api/types";
 import { ApprovalCard } from "../components/ApprovalCard";
 import { Avatar } from "../components/Avatar";
 import { ClampedText } from "../components/ClampedText";
+import { MaintenancePanel } from "../components/MaintenancePanel";
 import { PhaseBar } from "../components/PhaseBar";
 import { useToast } from "../components/Toast";
 import { IconArrowRight, IconCheck, IconChevronLeft, IconFolder } from "../components/icons";
@@ -105,6 +106,11 @@ export function ProjectLayout() {
           sprintNumber={processRes.data?.current_sprint_number ?? null}
         />
       </header>
+      {project.phase === "done" && (
+        <div className="page-body approval-slot">
+          <MaintenancePanel project={project} onDone={onChange} />
+        </div>
+      )}
       {project.awaiting_approval && (
         <div className="page-body approval-slot">
           <ApprovalCard project={project} onDone={onChange} />

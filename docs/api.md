@@ -1,7 +1,7 @@
 # REST API reference
 
 Base URL: `http://localhost:8000`. Interactive docs are served at `/docs` (Swagger UI).
-All bodies are JSON. There is no authentication; run locally only.
+All bodies are JSON. Authentication is optional: see [Authentication](#authentication).
 
 ## Endpoints
 | Method | Path | Description |
@@ -24,12 +24,25 @@ All bodies are JSON. There is no authentication; run locally only.
 | GET | `/projects/{id}/bugs?status=` | Bugs filed against the project's stories |
 | GET | `/projects/{id}/traceability` | Story -> design -> code -> test table with test results |
 | GET | `/projects/{id}/releases` | One release per finished sprint (`v0.N.0`) with its notes artifact |
+| GET | `/projects/{id}/release-checks` | The checks made on each release: the app starts, serves its contract, requirements, security |
+| POST | `/projects/{id}/maintenance` | Report a problem found after the release (409 unless the project is done) |
+| GET | `/projects/{id}/report` | A Markdown report of the project |
+| GET | `/projects/{id}/export` | A zip of the report and the generated project |
 | GET | `/projects/{id}/process` | The sprint's process levers and the process planned for the next sprint |
 | GET | `/process/model` | The process model: roles, product flow, entry/exit criteria and RACI per phase |
 | GET | `/projects/{id}/metrics` | GQM metrics per sprint, project totals, cost |
 | GET | `/sprints/{id}/burndown` | Burndown series and ideal line of one sprint |
 
 Every response has a schema in the OpenAPI docs at `/docs`. Unknown ids return 404.
+
+## Authentication
+By default there is none: run the API locally or behind an SSH tunnel. Start it with
+`WORKBENCH_API_TOKEN=<secret>` and every endpoint except `/health` needs the token, as
+`Authorization: Bearer <secret>`. A browser `EventSource` cannot send headers, so the event stream
+and any other URL also accept `?token=<secret>`. A request without a valid token gets 401 and
+`{"detail": "A valid API token is required"}`. The web UI asks for the token once and keeps it in
+the browser. The token is compared in constant time; it protects against casual access, not against
+someone who can read the traffic, so use HTTPS or a tunnel on a shared network.
 
 ## Create a project
 ```bash
@@ -110,7 +123,13 @@ Event kinds: `phase_started`, `approval_requested`, `approved`, `rejected`, `age
 `tests_written_first`, `release_created`, `release_exists`, `release_skipped`,
 `llm_replay_drift`, `llm_replay_fallback`, `nfrs_set`, `backlog_validated`,
 `entry_criteria_checked`, `exit_criteria_checked`, `sprint_plan_rejected`, `story_unplanned`,
-`sprint_replanned`.
+`sprint_replanned`, `agent_message`, `story_refined`, `backlog_refined`, `refinement_skipped`,
+`tests_corrected`, `tests_review_unchanged`, `tests_revised`, `tests_revision_unchanged`,
+`code_rejected`, `bug_attempts_reset`, `release_check`, `maintenance_requested`.
+
+`agent_message` is one agent telling another something (`payload.to` is the receiver role,
+`payload.body` the detail), for example the Architect announcing a contract or QA asking the
+Developer to fix a bug.
 
 ## Backlog
 `GET /projects/1/backlog`
@@ -162,12 +181,13 @@ anything else goes in `other`. The other fields summarise the story's quality st
   "design": [{"artifact_id": 5, "name": "openapi.yaml", "kind": "api_spec", "path": "",
               "version": 1}],
   "code": [], "test": [], "release": [], "other": [],
-  "sprint_number": 1, "tests_passed": 2, "tests_failed": 0, "last_test_ok": true,
+  "sprint_number": 1, "sprints": [1], "tests_passed": 2, "tests_failed": 0, "last_test_ok": true,
   "open_bugs": 0, "ac_count": 2, "test_count": 2, "complete": false}]
 ```
 | Field | Meaning |
 |---|---|
 | `sprint_number` | Number of the story's current sprint, `null` when it is not planned |
+| `sprints` | Every sprint number the story was planned into, carried-over ones included (`[]` when never planned). The traceability page filters by it |
 | `tests_passed`, `tests_failed`, `last_test_ok` | Result of the story's latest `test_run` (any sprint). `last_test_ok` is `null` when it never ran |
 | `open_bugs` | Bugs of the story with status `open` |
 | `ac_count` | Acceptance criteria of the story |
@@ -182,6 +202,40 @@ it with `GET /artifacts/{artifact_id}`. Unknown project: 404.
 [{"artifact_id": 21, "version": "v0.1.0", "sprint_id": 5, "sprint_number": 1,
   "created_at": "2026-10-17T10:00:00", "story_ids": [2, 3], "sha": "0123456789abcdef..."}]
 ```
+
+## Release checks
+`GET /projects/1/release-checks` lists the checks made when each sprint was released, oldest
+release first (see "Release checks" in [agents.md](agents.md)). A run without a real model makes
+none, so the list is empty. Unknown project: 404.
+```json
+[{"version": "v0.1.0", "sprint_id": 5, "name": "starts", "status": "passed",
+  "detail": "serves its OpenAPI document"},
+ {"version": "v0.1.0", "sprint_id": 5, "name": "serves its contract", "status": "failed",
+  "detail": "not served: GET /loans"},
+ {"version": "v0.1.0", "sprint_id": 5, "name": "The API shall respond quickly", "status": "met",
+  "detail": "p95 12 ms against 300 ms"}]
+```
+`status` is `passed`, `failed` or `skipped` for the checks of the app, and `met`, `not met` or
+`unverified` for a non-functional requirement (`unverified`: no automatic check exists for it).
+
+## Maintenance
+`POST /projects/1/maintenance` reports a problem found after the release. Body:
+`{"title": "Empty title is accepted", "description": "Creating an item with an empty title returns
+201.", "points": 2}` (`title` 3 to 120 characters, `description` 3 to 1000, `points` 1, 2, 3 or 5,
+default 2). It adds a top-priority story `Fix: <title>` with two Given/When/Then criteria to a
+`Maintenance` epic, logs `maintenance_requested` and moves the project to `release`, so the next
+`advance` plans a maintenance sprint (it may exceed `MAX_SPRINTS`: each request adds one sprint to
+the limit while its fix waits). The response is the project (`has_more_sprints` is true). A project
+that is not finished: 409. Unknown project: 404. Invalid body: 422.
+
+## Export
+`GET /projects/1/report` returns a Markdown report (`text/markdown`): the idea and vision, the
+outcome, the non-functional requirements, the backlog with acceptance criteria, every sprint with
+its retrospective, the releases and their checks and the open bugs.
+`GET /projects/1/export` returns a zip (`application/zip`, `Content-Disposition: attachment;
+filename="<project>.zip"`) with `PROJECT_REPORT.md` and the generated project under `project/`
+(code, tests, Dockerfile, CI workflow and release notes; no git history, caches or database files).
+Unknown project: 404.
 
 ## Process
 `GET /projects/1/process` returns the levers of the latest sprint and the ones the next sprint will

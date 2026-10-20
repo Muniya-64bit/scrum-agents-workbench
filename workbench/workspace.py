@@ -17,6 +17,12 @@ class UnsafePath(ValueError):
     pass
 
 
+def clean_text(text: str) -> str:
+    """Model output without NUL characters: a NUL is never meant in a source or text file and
+    makes Python refuse the whole file ('source code string cannot contain null bytes')."""
+    return text.replace("\x00", "")
+
+
 def repo_path(rel: str) -> str:
     """Read a path written by a model as relative to the repository root: models often write
     `/tests/test_x.py`. `Workspace.resolve` still rejects absolute paths; this only maps a
@@ -45,7 +51,8 @@ class Workspace:
         return self.path.joinpath(*p.parts)
 
     def write(self, rel: str, content: str) -> bool:
-        """Write a file. Returns False when the content is unchanged."""
+        """Write a file (without NUL characters). Returns False when the content is unchanged."""
+        content = clean_text(content)
         target = self.resolve(rel)
         if target.is_file() and target.read_text(encoding="utf-8") == content:
             return False

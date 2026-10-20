@@ -7,6 +7,7 @@ these endpoints and QA tests exactly these, so the three agents agree on paths, 
 status codes. `violations` then checks the code by rules (no LLM): a missing endpoint or a wrong
 success status becomes a bug for the Developer."""
 
+import json
 import re
 from dataclasses import dataclass
 
@@ -16,6 +17,7 @@ from workbench.db import repo
 from workbench.workspace import Workspace
 
 _TYPES = {"str": "string", "int": "integer", "float": "number", "bool": "boolean"}
+_EXAMPLES = {"str": "text", "int": 1, "float": 1.5, "bool": True}
 _ROUTE = re.compile(
     r"@\s*[\w.]+\.(get|post|put|patch|delete)\(\s*(?:path\s*=\s*)?[\"']([^\"']*)[\"']([^)]*)\)",
     re.IGNORECASE)
@@ -30,6 +32,16 @@ class Endpoint:
 
     def __str__(self) -> str:
         return f"{self.method} {self.path}"
+
+
+def example_body(request_fields: list[str]) -> dict:
+    """A request body for these 'name: type' fields: str -> "text", int -> 1, float -> 1.5,
+    bool -> true, anything else -> "text"."""
+    body = {}
+    for field in request_fields:
+        name, _, kind = field.partition(":")
+        body[name.strip()] = _EXAMPLES.get(kind.strip(), "text")
+    return body
 
 
 def render(endpoints: list) -> str:
@@ -50,6 +62,8 @@ def render(endpoints: list) -> str:
                     name, _, kind = field.partition(":")
                     lines.append(f"                {name.strip()}: "
                                  f"{{type: {_TYPES.get(kind.strip(), 'string')}}}")
+                # one concrete body, so the Developer and QA use the same field names
+                lines.append(f"            example: {json.dumps(example_body(e.request_fields))}")
             lines.append("      responses:")
             lines += [f"        '{e.success_status}':", "          description: Success"]
             for code in e.error_statuses:
