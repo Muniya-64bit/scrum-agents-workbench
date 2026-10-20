@@ -46,8 +46,8 @@ Rules:
   content in `files`, with relative forward-slash paths and NO leading slash.
 - Test the code that exists. For a FastAPI app, use `from fastapi.testclient import TestClient`
   and `from app.main import app`. Keep each test independent of the others.
-- Send request data as a JSON body: `client.post(url, json={...})`. Import every module your
-  tests use.
+- Create the client with `with TestClient(app) as client:` so the app's startup code runs. Send
+  request data as a JSON body: `client.post(url, json={...})`. Import every module your tests use.
 - Do not change application code. Do not use the network or sleep.
 - summary is one sentence."""
 

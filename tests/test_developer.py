@@ -175,6 +175,83 @@ def test_prompt_skips_binary_files_the_app_created(db: Session, project: m.Proje
     assert ws.files() == ["app/main.py", "library.db"] and ws.text_files() == ["app/main.py"]
 
 
+ROUTES_V1 = (
+    "from fastapi import FastAPI\n"
+    "app = FastAPI()\n"
+    "@app.post('/books', status_code=201)\n"
+    "def add(): ...\n"
+    "@app.get('/books/{book_id}')\n"
+    "def get(): ...\n")
+
+
+def _main(content: str) -> dict:
+    return {"summary": "s", "files": [{"path": "app/main.py", "content": content}]}
+
+
+def test_a_rewrite_that_removes_endpoints_is_refused_and_retried(
+        db: Session, project: m.Project, monkeypatch):
+    """The Developer's second story rewrote main.py without the first story's routes."""
+    Workspace(project.id).init().write("app/main.py", ROUTES_V1)
+    dropped = _main(
+        "from fastapi import FastAPI\napp = FastAPI()\n@app.get('/loans')\ndef f(): ...\n")
+    kept = _main(ROUTES_V1 + "@app.get('/loans')\ndef loans(): ...\n")
+    llm = _fake_llm(monkeypatch, dropped, kept)
+    prompts: list[str] = []
+    real_call = llm._call
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: (
+        prompts.append(prompt), real_call(system, prompt, stats))[1])
+
+    DeveloperAgent(llm).run(db, project.id, EXECUTION)
+
+    kinds = _kinds(db, project.id)
+    assert kinds.count("code_rejected") == 1 and "code_committed" in kinds
+    assert "POST /books" in prompts[1] and "was refused" in prompts[1]  # the reason is passed on
+    assert "was refused" not in prompts[0]
+    # the first story's routes stay
+    assert "@app.post('/books'" in Workspace(project.id).read("app/main.py")
+
+
+def test_a_second_refusal_changes_nothing_and_fails_the_bug_attempt(
+        db: Session, project: m.Project, monkeypatch):
+    Workspace(project.id).init().write("app/main.py", ROUTES_V1)
+    story = _story(db, project)
+    bug = Tools(db, project.id, "qa").report_bug(story.id, "tests.x: broken")
+    dropped = _main("from fastapi import FastAPI\napp = FastAPI()\n")
+    DeveloperAgent(_fake_llm(monkeypatch, dropped, dropped)).run(db, project.id, EXECUTION)
+
+    assert _kinds(db, project.id).count("code_rejected") == 2
+    assert Workspace(project.id).read("app/main.py") == ROUTES_V1
+    db.refresh(bug)
+    assert bug.retries == 1 and bug.status == "open"  # one failed attempt, not two
+
+
+def test_moving_routes_behind_a_router_prefix_is_not_a_removal(
+        db: Session, project: m.Project, monkeypatch):
+    Workspace(project.id).init().write("app/main.py", ROUTES_V1)
+    moved = {"summary": "s", "files": [
+        {"path": "app/main.py",
+         "content": "from fastapi import FastAPI\nfrom app.books import router\napp = FastAPI()\n"
+                    "app.include_router(router, prefix='/books')\n"},
+        {"path": "app/books.py",
+         "content": "from fastapi import APIRouter\nrouter = APIRouter()\n"
+                    "@router.post('/', status_code=201)\ndef add(): ...\n"
+                    "@router.get('/{book_id}')\ndef get(): ...\n"}]}
+    DeveloperAgent(_fake_llm(monkeypatch, moved)).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "code_rejected" not in kinds and "code_committed" in kinds
+
+
+def test_a_first_version_cannot_remove_anything(db: Session, project: m.Project, monkeypatch):
+    DeveloperAgent(_fake_llm(monkeypatch, _main(ROUTES_V1))).run(db, project.id, EXECUTION)
+    assert "code_rejected" not in _kinds(db, project.id)
+    assert "@app.post('/books'" in Workspace(project.id).read("app/main.py")
+
+
+def test_prompt_asks_for_tables_created_at_import():
+    from workbench.agents.developer import SYSTEM_PROMPT
+    assert "CREATE TABLE IF NOT EXISTS" in SYSTEM_PROMPT and "module level" in SYSTEM_PROMPT
+
+
 def test_story_id_task_builds_that_story_only(db: Session, project: m.Project):
     other = _story(db, project, "Delete an item")  # not in a sprint, but asked for directly
     DeveloperAgent().run(db, project.id, {**EXECUTION, "story_id": other.id})

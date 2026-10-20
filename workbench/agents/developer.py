@@ -57,6 +57,9 @@ Rules:
 - If bugs are listed, fix them first without breaking existing behaviour.
 - Only fastapi, pydantic, httpx and the Python standard library are installed; use `sqlite3` for
   storage. Import nothing else, even if the architecture names another stack.
+- If the app uses SQLite, create every table with CREATE TABLE IF NOT EXISTS in a function that
+  you also call at module level (for example `init_db()` right after its definition). Do not
+  create tables only in a startup event or a lifespan: tests import the app and may not run them.
 - Do not write tests; QA writes them in tests/. Keep the code small and readable.
 - summary is one sentence describing what you changed."""
 
@@ -136,8 +139,11 @@ class DeveloperAgent(BaseAgent):
                     and not _linked(db, project_id, story.id, "code")
                     and not _linked(db, project_id, story.id, "test")):
                 self.test_writer(db, project_id, {**task, "story_id": story.id})
-            out = super().run(db, project_id, {**task, "story_id": story.id,
-                                               "max_fix_retries": max_retries})
+            story_task = {**task, "story_id": story.id, "max_fix_retries": max_retries}
+            out = super().run(db, project_id, story_task)
+            if story_task.get("rejected_routes"):  # refused: ask once more, with the reason
+                story_task["retried"] = True
+                out = super().run(db, project_id, story_task)
             files += out.files
         return CodeOutput(summary=f"Implemented {len(stories)} stories", files=files)
 
@@ -178,6 +184,12 @@ class DeveloperAgent(BaseAgent):
             for path, a in latest_tests.items():
                 lines += [f"=== {path} ===", a.content]
 
+        if task.get("rejected_routes"):
+            removed = ", ".join(task["rejected_routes"])
+            lines += ["", "Your previous answer was refused: it would have removed these "
+                          f"endpoints, which other stories already use: {removed}. Return the "
+                          "changed files again and keep every existing endpoint."]
+
         lines += ["", "Current files:"]
         ws, used, skipped = self.workspace(project_id), 0, []
         for path in ws.text_files():
@@ -215,11 +227,41 @@ class DeveloperAgent(BaseAgent):
             ]
         return {"summary": f"Implemented story #{story.id}: {story.title}", "files": files}
 
+    def _removed_routes(self, ws: Workspace, files: list) -> list[contract.Endpoint]:
+        """Endpoints the workspace has now that the answer's `app/*.py` files would take away."""
+        new: dict[str, str] = {}
+        for f in files:
+            try:
+                path = ws.resolve(repo_path(f.path)).relative_to(ws.path).as_posix()
+            except UnsafePath:
+                continue
+            if path.startswith("app/") and path.endswith(".py"):
+                new[path] = f.content
+        before = contract.implemented(ws)
+        if not new or not before:
+            return []
+        after = [e for path in ws.text_files()
+                 if path.startswith("app/") and path.endswith(".py") and path not in new
+                 for e in contract.routes_in(ws.read(path))]
+        after += [e for content in new.values() for e in contract.routes_in(content)]
+        return contract.lost(before, after)
+
     def apply(self, tools: Tools, out: BaseModel, task: dict) -> None:
         assert isinstance(out, CodeOutput)
         db, story = tools.db, repo.get(tools.db, m.UserStory, task["story_id"])
         bugs = _fixable_bugs(db, story.id, fix_retry_limit(db, tools.project_id, task))
         ws = self.workspace(tools.project_id).init()
+
+        removed = self._removed_routes(ws, out.files)
+        if removed:  # a rewrite that drops endpoints other stories use is not applied
+            task["rejected_routes"] = [str(e) for e in removed]
+            names = ", ".join(task["rejected_routes"])
+            tools.log("code_rejected", f"{story.title}: would remove {names}", story_id=story.id,
+                      endpoints=task["rejected_routes"])
+            if task.get("retried"):  # the second answer was refused as well: a failed attempt
+                for b in bugs:
+                    tools.record_fix_attempt(b.id, fixed=False)
+            return
 
         changed: dict[str, str] = {}
         for f in out.files:

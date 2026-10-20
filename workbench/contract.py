@@ -93,16 +93,20 @@ def _norm(path: str) -> str:
     return re.sub(r"\{[^}]*\}", "{}", path.rstrip("/") or "/")
 
 
-def implemented(ws: Workspace) -> list[Endpoint]:
-    """The routes declared in the workspace's `app/` Python files (FastAPI decorators)."""
+def routes_in(source: str) -> list[Endpoint]:
+    """The FastAPI routes declared in one Python source text (decorators)."""
     found: list[Endpoint] = []
-    for rel in ws.text_files():
-        if rel.startswith("app/") and rel.endswith(".py"):
-            for m in _ROUTE.finditer(ws.read(rel)):
-                status = _STATUS.search(m.group(3))
-                found.append(Endpoint(m.group(1).upper(), _norm(m.group(2)),
-                                      int(status.group(1)) if status else 200))
+    for m in _ROUTE.finditer(source):
+        status = _STATUS.search(m.group(3))
+        found.append(Endpoint(m.group(1).upper(), _norm(m.group(2)),
+                              int(status.group(1)) if status else 200))
     return found
+
+
+def implemented(ws: Workspace) -> list[Endpoint]:
+    """The routes declared in the workspace's `app/` Python files."""
+    return [e for rel in ws.text_files() if rel.startswith("app/") and rel.endswith(".py")
+            for e in routes_in(ws.read(rel))]
 
 
 def _same_path(contract: str, route: str) -> bool:
@@ -122,3 +126,16 @@ def violations(contract: list[Endpoint], code: list[Endpoint]) -> list[tuple[End
             problems.append((want, f"must return status {want.success_status} on success "
                                    f"(add status_code={want.success_status} to the route)"))
     return problems
+
+
+def lost(before: list[Endpoint], after: list[Endpoint]) -> list[Endpoint]:
+    """The routes of `before` that `after` no longer has. A route that moved behind a router
+    prefix still counts as kept (one path is the other with a prefix)."""
+    def kept(e: Endpoint) -> bool:
+        # a route "/" is the collection route of a router with a prefix: it can be any path
+        return any(a.method == e.method
+                   and (a.path == "/" or e.path == "/"
+                        or _same_path(e.path, a.path) or _same_path(a.path, e.path))
+                   for a in after)
+
+    return [e for e in dict.fromkeys(before) if not kept(e)]
