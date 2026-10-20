@@ -46,7 +46,7 @@ Every agent talks to the model through `LLMClient`. `LLM_MODE` decides where the
 | Mode | What it does | Cost | Use it for |
 |---|---|---|---|
 | `mock` | Each agent's `mock_output()`; no network | Free | Development, unit tests, CI |
-| `live` | Claude API, answers cached by prompt hash in `.cache/llm/` | Tokens | Real runs |
+| `live` | The configured provider (Claude API or Ollama, `LLM_PROVIDER`), answers cached by prompt hash in `.cache/llm/` | Tokens (none with Ollama) | Real runs |
 | `record` | Like `live` but ignores the cache and saves every answer in the scenario directory | Tokens | Making a scenario from a real run |
 | `replay` | Reads the answers from the scenario directory; never calls a model | Free | Demos, the backup video, regression tests |
 
