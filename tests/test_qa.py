@@ -356,3 +356,10 @@ def test_execution_phase_end_to_end(db: Session, project: m.Project):
     assert "Prepare release" in history
     assert any(message.startswith("Story #") for message in history)
     assert any(message.startswith("Tests for story #") for message in history)
+
+
+def test_qa_is_told_not_to_assert_error_message_text():
+    from workbench.agents.qa import SYSTEM_PROMPT
+
+    assert "never the exact text of an error message" in SYSTEM_PROMPT
+    assert "with TestClient(app) as client" in SYSTEM_PROMPT

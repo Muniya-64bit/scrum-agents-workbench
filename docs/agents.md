@@ -186,6 +186,26 @@ sprint story that has code it:
    (`MAX_FIX_RETRIES`, 3, by default) attempts per bug. A bug the Developer marked fixed that
    still fails is reopened; after the limit it stays open for a human.
 
+### Tasks nobody can close
+A story is done only when all its tasks are done, and only the Developer (on a commit) and QA (when
+the tests pass) ever mark a task done. The sprint planner may assign tasks only to `developer` and
+`qa`; any other role is mapped to `developer`, and a story without a developer task or without a
+QA task gets a default one (`Implement: ...`, `Test: ...`). Live runs once had tasks for the
+architect, product owner or devops that stayed `todo` forever, so those stories could never be
+completed however good the code was.
+
+### Guards on the Developer's code
+- **Tables at import time.** The Developer is told to create SQLite tables with
+  `CREATE TABLE IF NOT EXISTS` in a function it also calls at module level. A live run had them
+  created only in a startup event, which `TestClient(app)` does not run, so every test failed with
+  `no such table`. QA's tests now use `with TestClient(app) as client:`, so startup code runs too.
+- **No dropped endpoints.** Before a story's files are written, `contract.lost` compares the
+  routes the workspace has with the routes it would have. A rewrite that removes an endpoint (the
+  second story overwrote `main.py` without the first story's routes) is not applied: the
+  Developer gets one more try with the removed endpoints named in the prompt, and a second refusal
+  counts as a failed fix attempt. A route that moved behind a router prefix is not a removal.
+  Events: `code_rejected`.
+
 ### API contract
 The Architect's per-story design carries `endpoints`, each with method, path, purpose,
 `request_fields`, `success_status` and `error_statuses` (at least one per story). `workbench/contract.py`

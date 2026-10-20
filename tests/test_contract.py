@@ -84,3 +84,31 @@ def test_for_story_returns_the_newest_contract(db: Session):
     t.write_artifact("api_spec", "API: Add a book", contract.render([CREATE]), story_id=story.id)
     text, endpoints = contract.for_story(db, p.id, story.id)
     assert endpoints == [Endpoint("POST", "/books", 201)] and "title" in text
+
+
+def test_routes_in_reads_one_source_text():
+    source = ("@app.post('/a/{x}', status_code=201)\ndef f(): ...\n"
+              "@router.get(\"/b/\")\ndef g(): ...\n")
+    assert contract.routes_in(source) == [Endpoint("POST", "/a/{}", 201),
+                                          Endpoint("GET", "/b", 200)]
+    assert contract.routes_in("x = 1") == []
+
+
+def test_lost_lists_routes_that_disappeared():
+    before = [Endpoint("POST", "/books", 201), Endpoint("GET", "/books/{}", 200),
+              Endpoint("POST", "/books", 201)]
+    assert contract.lost(before, before) == []
+    after = [Endpoint("GET", "/books/{}", 200)]
+    assert contract.lost(before, after) == [Endpoint("POST", "/books", 201)]  # once, not twice
+
+
+def test_lost_tolerates_a_router_prefix_in_either_direction():
+    get_item, get_book = Endpoint("GET", "/{}", 200), Endpoint("GET", "/books/{}", 200)
+    assert contract.lost([get_book], [get_item]) == []
+    assert contract.lost([get_item], [get_book]) == []
+    assert contract.lost([Endpoint("GET", "/books", 200)], [Endpoint("POST", "/books", 200)])
+
+
+def test_a_root_route_stands_for_a_router_collection_route():
+    after = [Endpoint("POST", "/", 201)]  # `@router.post("/")` under prefix="/books"
+    assert contract.lost([Endpoint("POST", "/books", 201)], after) == []

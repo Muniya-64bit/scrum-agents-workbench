@@ -24,7 +24,6 @@ from workbench.process import (
     suggest_process_changes,
 )
 from workbench.schemas import (
-    ROLES,
     ProcessChanges,
     RetroOutput,
     SprintPlanOutput,
@@ -62,17 +61,23 @@ def _select_stories(candidates: list[m.UserStory], requested: list[int], capacit
     return chosen
 
 
+# Only these agents ever mark a task done (the Developer when it commits, QA when the tests pass).
+# A task for any other role would stay open forever and the story could never be completed.
+TASK_ROLES = ("developer", "qa")
+
+
 class SprintPlanner(BaseAgent):
     role = "scrum_master"
     output_schema = SprintPlanOutput
-    system_prompt = f"""You are a Scrum Master running sprint planning.
+    system_prompt = """You are a Scrum Master running sprint planning.
 Choose stories from the backlog and break them into tasks.
 
 Rules:
 - Use only story ids from the backlog list. The total points must not exceed the capacity.
 - Prefer high-priority stories (1 is highest) and give the sprint one clear goal.
 - Create 2 to 4 tasks per chosen story. Each task has a story_id, a short title and an assignee.
-- assignee must be one of: {", ".join(ROLES)}. Implementation goes to developer, tests to qa.
+- assignee must be developer or qa. Implementation goes to developer, tests to qa. No other
+  role takes tasks.
 - If retro actions from the previous sprint are listed, plan so that they are followed.
 - Stories marked (carried over) were not finished last sprint; plan them first.
 - summary is one sentence."""
@@ -139,13 +144,16 @@ Rules:
             tools.add_story_to_sprint(sprint.id, story.id)
             if _has_tasks(tools.db, story.id):  # carried over: keep its tasks
                 continue
-            titles = [t for t in out.tasks if t.story_id == story.id]
-            if not titles:  # the LLM gave no tasks for this story: add a default pair
+            roles = set()
+            for t in (t for t in out.tasks if t.story_id == story.id):
+                assignee = t.assignee if t.assignee in TASK_ROLES else "developer"
+                roles.add(assignee)
+                tools.create_task(story.id, t.title, assignee)
+            # a story is done when its code is written and its tests pass: it needs both tasks
+            if "developer" not in roles:
                 tools.create_task(story.id, f"Implement: {story.title}", "developer")
+            if "qa" not in roles:
                 tools.create_task(story.id, f"Test: {story.title}", "qa")
-            for t in titles:
-                tools.create_task(story.id, t.title,
-                                  t.assignee if t.assignee in ROLES else "developer")
         committed = sum(story.points for story in chosen)
         used = cfg.model_copy(update={"capacity": capacity})  # the process actually used
         tools.log("sprint_planned", f"Sprint {sprint.number}: {committed} points committed",
