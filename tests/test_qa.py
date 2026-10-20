@@ -107,6 +107,32 @@ def test_runner_treats_no_tests_as_failure(tmp_path):
     assert not result.ok and result.failures[0].test == "collection"
 
 
+def test_runner_starts_every_run_from_a_fresh_database(tmp_path):
+    """A leftover SQLite file kept an old schema, so a story that added a column failed with
+    `no such column` however right its code was."""
+    ws = _workspace_with(tmp_path, "import os\n\n"
+                                   "def test_no_stale_database():\n"
+                                   "    assert not os.path.exists('library.db')\n"
+                                   "    assert not os.path.exists('app/data.sqlite3')\n")
+    (tmp_path / "library.db").write_bytes(b"old schema")
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "data.sqlite3").write_bytes(b"old schema")
+    (tmp_path / "notes.txt").write_text("keep")
+    assert runner.run_pytest(ws).ok
+    assert (tmp_path / "notes.txt").exists()  # only database files are removed
+
+
+def test_clear_databases_counts_what_it_removes_and_spares_git(tmp_path):
+    (tmp_path / "a.db").write_bytes(b"x")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "b.sqlite").write_bytes(b"x")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "c.db").write_bytes(b"x")
+    assert runner.clear_databases(tmp_path) == 2
+    assert (tmp_path / ".git" / "c.db").exists()
+    assert runner.clear_databases(tmp_path) == 0
+
+
 def test_runner_enforces_timeout(tmp_path):
     ws = _workspace_with(tmp_path, "import time\n\ndef test_slow():\n    time.sleep(60)\n")
     result = runner.run_pytest(ws, timeout=2)

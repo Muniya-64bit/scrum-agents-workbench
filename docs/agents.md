@@ -205,6 +205,12 @@ capacity, and four of six stories were never started. Four rules keep the team m
   (`bug_attempts_reset`). The Developer's prompt says how many earlier attempts failed and asks
   for a different approach, so a reset does not repeat the same answer.
 
+### A fresh database for every test run
+The generated app creates its SQLite file when its tests run. A later story that adds a column then
+failed with `no such column` against the old file, because `CREATE TABLE IF NOT EXISTS` leaves an
+existing table alone. `runner.run_pytest` deletes `*.db`, `*.sqlite` and `*.sqlite3` files in the
+workspace before each run, so the database always comes from the current code.
+
 ### Tasks nobody can close
 A story is done only when all its tasks are done, and only the Developer (on a commit) and QA (when
 the tests pass) ever mark a task done. The sprint planner may assign tasks only to `developer` and
