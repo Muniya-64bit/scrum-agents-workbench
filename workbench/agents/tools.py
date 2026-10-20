@@ -45,6 +45,17 @@ class Tools:
         self.log("story_created", s.title, story_id=s.id)
         return s
 
+    def refine_story(self, story_id: int, **fields) -> m.UserStory | None:
+        """Change fields of a backlog story. Logs `story_refined` with `{field: [old, new]}` and
+        returns the story, or None when nothing changed."""
+        story = repo.get(self.db, m.UserStory, story_id)
+        changes = {k: [getattr(story, k), v] for k, v in fields.items() if getattr(story, k) != v}
+        if not changes:
+            return None
+        repo.update(self.db, story, **{k: v[1] for k, v in changes.items()})
+        self.log("story_refined", story.title, story_id=story.id, changes=changes)
+        return story
+
     def create_sprint(self, goal: str, capacity: int = 10) -> m.Sprint:
         number = len(repo.sprints(self.db, self.project_id)) + 1
         s = repo.add(self.db, m.Sprint(project_id=self.project_id, number=number, goal=goal,

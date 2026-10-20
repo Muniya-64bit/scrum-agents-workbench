@@ -110,6 +110,19 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
       return { text: `Rejected a file with an unsafe or disallowed path: ${m}`, tone: "danger" };
     case "tests_missing":
       return { text: `${m}: QA wrote no usable test file`, tone: "danger" };
+    case "story_refined": {
+      const changes = (e.payload.changes ?? {}) as Record<string, [unknown, unknown]>;
+      const parts = Object.entries(changes).map(([field, [from, to]]) =>
+        field === "acceptance_criteria"
+          ? "acceptance criteria"
+          : `${field} ${String(from)} → ${String(to)}`,
+      );
+      return { text: `Refined story ${q(m)}: ${parts.join(", ")}`, tone: "accent" };
+    }
+    case "backlog_refined":
+      return { text: m, tone: e.payload.after === 0 ? "done" : "testing" };
+    case "refinement_skipped":
+      return { text: m, tone: "neutral" };
     case "agent_message":
       return { text: `Told the ${roleLabel(String(e.payload.to ?? ""))}: ${m}`, tone: "accent" };
     case "tests_revised":

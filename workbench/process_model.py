@@ -148,12 +148,13 @@ MODEL: list[Activity] = [
               "developer": "I", "qa": "I", "devops": "I"},
     ),
     Activity(
-        phase="sprint_planning", name="Sprint planning",
-        purpose="Choose the stories for the sprint within capacity and split them into tasks.",
-        responsible="scrum_master", agents=["scrum_master"],
-        consumes=["Epics and user stories", "Process levers", "Retrospective actions",
-                  "Rejection reason (when re-planning)"],
-        produces=["Sprint goal", "Sprint backlog", "Tasks"],
+        phase="sprint_planning", name="Backlog refinement and sprint planning",
+        purpose="Refine the backlog stories that failed the quality check, then choose the "
+                "stories for the sprint within capacity and split them into tasks.",
+        responsible="scrum_master", agents=["product_owner", "scrum_master"],
+        consumes=["Epics and user stories", "Backlog quality report", "Process levers",
+                  "Retrospective actions", "Rejection reason (when re-planning)"],
+        produces=["Refined stories", "Sprint goal", "Sprint backlog", "Tasks"],
         entry=[Criterion("stories_to_plan", "The backlog has stories not yet in a sprint",
                          _has_unplanned)],
         exit=[Criterion("sprint_has_stories", "The sprint has at least one story",
@@ -163,7 +164,7 @@ MODEL: list[Activity] = [
               Criterion("within_capacity", "Committed points do not exceed the capacity",
                         _within_capacity)],
         gate=True,
-        raci={"human": "A", "product_owner": "C", "scrum_master": "R", "architect": "I",
+        raci={"human": "A", "product_owner": "R", "scrum_master": "R", "architect": "I",
               "developer": "C", "qa": "C", "devops": "I"},
     ),
     Activity(
