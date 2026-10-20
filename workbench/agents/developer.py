@@ -180,7 +180,8 @@ class DeveloperAgent(BaseAgent):
         spec = contract.for_story(db, project_id, story.id)[0]
         if spec:
             lines += ["", "API contract from the Architect (implement exactly these endpoints, "
-                          "JSON field names and status codes):", spec]
+                          "status codes and JSON field names; a request body has exactly the "
+                          "fields of its `example`):", spec]
 
         max_retries = fix_retry_limit(db, project_id, task)
         bugs = _fixable_bugs(db, story.id, max_retries)

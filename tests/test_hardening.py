@@ -40,10 +40,16 @@ def test_every_tool_logs_its_event_with_documented_keys(db: Session):
     p = repo.create_project(db, "x", "y")
     t = Tools(db, p.id, "scrum_master")
 
-    def check(kind: str, keys: set[str], agent: str = "scrum_master") -> m.Event:
-        e = last(db, p.id)
+    def check(kind: str, keys: set[str], agent: str = "scrum_master", back: int = 1) -> m.Event:
+        e = repo.events_since(db, p.id)[-back]
         assert (e.kind, set(e.payload), e.agent) == (kind, keys, agent), e.payload
         return e
+
+    def check_message(to: str, subject: str, back: int = 1) -> None:
+        """A bug report or a fix attempt also tells the other agent."""
+        e = repo.events_since(db, p.id)[-back]
+        assert (e.kind, e.payload["to"], e.message) == ("agent_message", to, subject)
+        assert {"to", "body", "story_id", "bug_id"} <= set(e.payload)
 
     t.set_vision("Be useful")
     assert check("vision_set", set()).message == "Be useful"
@@ -72,11 +78,14 @@ def test_every_tool_logs_its_event_with_documented_keys(db: Session):
     t.link_artifact(art.id, [story.id], "design")
     check("artifact_linked", {"artifact_id", "story_ids"})
     bug = t.report_bug(story.id, "boom")
-    check("bug_reported", {"bug_id", "story_id"})
+    check("bug_reported", {"bug_id", "story_id"}, back=2)
+    check_message("developer", f"Please fix bug #{bug.id}")
     t.record_fix_attempt(bug.id, fixed=False)
-    check("bug_fix_failed", {"bug_id", "story_id", "retries"})
+    check("bug_fix_failed", {"bug_id", "story_id", "retries"}, back=2)
+    check_message("qa", f"Bug #{bug.id}: I could not fix it")
     t.record_fix_attempt(bug.id, fixed=True)
-    e = check("bug_fixed", {"bug_id", "story_id", "retries"})
+    e = check("bug_fixed", {"bug_id", "story_id", "retries"}, back=2)
+    check_message("qa", f"Bug #{bug.id}: a fix is committed, please test again")
     assert e.payload["retries"] == 2 and bug.status == "fixed"
     t.reopen_bug(bug.id)
     check("bug_reopened", {"bug_id", "story_id"})

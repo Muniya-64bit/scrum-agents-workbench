@@ -1,4 +1,4 @@
-import { delta, duration, pct, pts, tokens, usd } from "./format";
+import { slugify, delta, duration, pct, pts, tokens, usd } from "./format";
 
 describe("format helpers", () => {
   it("formats ratios as percentages", () => {
@@ -67,5 +67,14 @@ describe("format helpers", () => {
         good: false,
       });
     });
+  });
+});
+
+
+describe("slugify", () => {
+  it("makes a safe file name stem", () => {
+    expect(slugify("Todo app")).toBe("todo-app");
+    expect(slugify("  Library / Loans! ")).toBe("library-loans");
+    expect(slugify("***")).toBe("project");
   });
 });

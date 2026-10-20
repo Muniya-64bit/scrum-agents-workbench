@@ -25,6 +25,12 @@ def backlog_po(count: int, points: int = 2) -> BaseAgent:
         role = "product_owner"
         output_schema = BacklogOutput
 
+        def run(self, db, project_id, task=None):
+            """Writes the backlog once; in sprint planning (refinement) it does nothing."""
+            if (task or {}).get("phase") == "sprint_planning":
+                return BacklogOutput(summary="nothing to refine", vision="", epics=[])
+            return super().run(db, project_id, task)
+
         def build_prompt(self, db, project_id, task):
             return "idea"
 

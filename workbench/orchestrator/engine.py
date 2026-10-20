@@ -36,6 +36,7 @@ class Phase(StrEnum):
 
 
 ORDER = list(Phase)
+MAINTENANCE_EPIC = "Maintenance"  # where problems reported after a release become stories
 PHASE_AGENTS: dict[Phase, list[str]] = {Phase(a.phase): a.agents for a in process_model.MODEL}
 # human approval needed after the phase runs
 GATES = {Phase(a.phase) for a in process_model.MODEL if a.gate}
@@ -79,11 +80,48 @@ class Orchestrator:
 
     def more_sprints(self, project_id: int) -> bool:
         """Is another sprint possible: stories left that fit the next capacity, and fewer than
-        MAX_SPRINTS sprints so far."""
-        if len(repo.sprints(self.db, project_id)) >= config.MAX_SPRINTS:
+        MAX_SPRINTS sprints so far. Every maintenance request adds one sprint to that limit while
+        its fix is still waiting."""
+        sprints = len(repo.sprints(self.db, project_id))
+        requests = sum(1 for e in repo.events_since(self.db, project_id)
+                       if e.kind == "maintenance_requested")
+        if requests and self.maintenance_pending(project_id) \
+                and sprints < config.MAX_SPRINTS + requests:
+            return True
+        if sprints >= config.MAX_SPRINTS:
             return False
         capacity = process.next_process(self.db, project_id)[0].capacity
         return any(s.points <= capacity for s in repo.unplanned_stories(self.db, project_id))
+
+    def maintenance_pending(self, project_id: int) -> bool:
+        """Is a reported problem waiting for a sprint?"""
+        return any(s.epic.title == MAINTENANCE_EPIC
+                   for s in repo.unplanned_stories(self.db, project_id))
+
+    def request_maintenance(self, project_id: int, title: str, description: str,
+                            points: int = 2) -> m.Project:
+        """A problem found after the release: it becomes a top-priority fix story, and the next
+        step plans a maintenance sprint. Only a finished project takes one."""
+        p = self._project(project_id)
+        if p.phase != Phase.DONE:
+            raise RuntimeError("Only a finished project takes a maintenance request")
+        tools = Tools(self.db, project_id, "human")
+        epic = next((e for e in repo.epics(self.db, project_id) if e.title == MAINTENANCE_EPIC),
+                    None) or tools.create_epic(MAINTENANCE_EPIC,
+                                               "Problems found after a release")
+        problem = description.strip().rstrip(".")
+        story = tools.create_story(
+            epic.id, title=f"Fix: {title.strip()}", as_a="user of the released product",
+            i_want=f"this problem fixed: {problem}", so_that="the product works as released",
+            acceptance_criteria=[
+                f"Given the released product When the problem is tried again ({problem}) "
+                "Then it behaves correctly",
+                "Given the fix When the existing tests run Then all of them still pass"],
+            points=points, priority=1)
+        tools.log("maintenance_requested", title.strip(), story_id=story.id,
+                  description=description.strip())
+        repo.update(self.db, p, phase=Phase.RELEASE.value)  # the next step plans the sprint
+        return p
 
     def step(self, project_id: int) -> m.Project:
         """Move to the next phase and run its agents. Blocked while awaiting approval."""

@@ -119,6 +119,16 @@ def test_contract_is_rendered_from_the_endpoints(db: Session, project: m.Project
     assert "title: {type: string}" in spec.content
 
 
+def test_the_contract_is_announced_to_the_developer_and_qa(db: Session, project: m.Project):
+    ArchitectAgent().run(db, project.id, EXECUTION)
+    story = repo.backlog(db, project.id)[0]
+    notes = [e for e in repo.events_since(db, project.id) if e.kind == "agent_message"]
+    assert sorted(e.payload["to"] for e in notes) == ["developer", "qa"]
+    assert all(e.agent == "architect" and e.payload["story_id"] == story.id for e in notes)
+    assert all(e.message == f"API contract for story #{story.id}: {story.title}" for e in notes)
+    assert "POST /" in notes[0].payload["body"]
+
+
 def test_design_prompt_lists_endpoints_already_designed(db: Session, project: m.Project):
     ArchitectAgent().run(db, project.id, EXECUTION)
     prompt = DesignDelta().build_prompt(db, project.id, EXECUTION)

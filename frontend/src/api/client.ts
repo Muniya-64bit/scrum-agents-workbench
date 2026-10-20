@@ -8,6 +8,7 @@ import type {
   Project,
   ProjectMetrics,
   Release,
+  ReleaseCheck,
   Sprint,
   SprintDetail,
   Task,
@@ -28,20 +29,68 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let res: Response;
+const TOKEN_KEY = "workbench-api-token";
+
+/** Fired when the API answers 401, so the app can ask for a token. */
+export const UNAUTHORIZED_EVENT = "workbench:unauthorized";
+
+/** The API token the person typed in, kept in this browser only ("" when there is none). */
+export function getToken(): string {
   try {
-    res = await fetch(API_BASE + path, {
-      ...init,
-      headers: { "content-type": "application/json", ...init.headers },
-    });
+    return localStorage.getItem(TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setToken(token: string): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // storage is blocked: the token only lasts until the page is reloaded
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+async function fail(res: Response): Promise<never> {
+  if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  throw new ApiError(await errorMessage(res), res.status);
+}
+
+async function send(path: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(API_BASE + path, init);
   } catch {
     throw new ApiError("Cannot reach the API. Is the backend running on port 8000?", 0);
   }
-  if (!res.ok) {
-    throw new ApiError(await errorMessage(res), res.status);
-  }
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await send(path, {
+    ...init,
+    headers: { "content-type": "application/json", ...authHeaders(), ...init.headers },
+  });
+  if (!res.ok) return fail(res);
   return (await res.json()) as T;
+}
+
+/** Download a file from the API (it needs the token, so a plain link cannot do it). */
+export async function download(path: string, filename: string): Promise<void> {
+  const res = await send(path, { headers: authHeaders() });
+  if (!res.ok) return fail(res);
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** FastAPI errors look like {"detail": "..."} or, for validation, {"detail": [{msg}]}. */
@@ -61,6 +110,8 @@ export const api = {
   getProject: (id: number) => request<Project>(`/projects/${id}`),
   createProject: (name: string, idea: string) =>
     request<Project>("/projects", { method: "POST", body: JSON.stringify({ name, idea }) }),
+  requestMaintenance: (id: number, body: { title: string; description: string; points: number }) =>
+    request<Project>(`/projects/${id}/maintenance`, { method: "POST", body: JSON.stringify(body) }),
   advance: (id: number) => request<Project>(`/projects/${id}/advance`, { method: "POST" }),
   approve: (id: number, approved: boolean, comment = "") =>
     request<Project>(
@@ -82,11 +133,15 @@ export const api = {
   traceability: (id: number) => request<TraceRow[]>(`/projects/${id}/traceability`),
   artifact: (artifactId: number) => request<Artifact>(`/artifacts/${artifactId}`),
   releases: (id: number) => request<Release[]>(`/projects/${id}/releases`),
+  releaseChecks: (id: number) => request<ReleaseCheck[]>(`/projects/${id}/release-checks`),
   process: (id: number) => request<ProcessInfo>(`/projects/${id}/process`),
   improvement: (id: number) => request<ImprovementRow[]>(`/projects/${id}/improvement`),
 };
 
 /** URL for the live event stream (Server-Sent Events). */
 export function streamUrl(projectId: number, after: number): string {
-  return `${API_BASE}/projects/${projectId}/stream?after=${after}`;
+  // an EventSource cannot send headers, so the token goes in the query
+  const token = getToken();
+  const auth = token ? `&token=${encodeURIComponent(token)}` : "";
+  return `${API_BASE}/projects/${projectId}/stream?after=${after}${auth}`;
 }

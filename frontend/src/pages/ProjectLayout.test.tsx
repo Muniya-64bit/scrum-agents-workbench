@@ -66,6 +66,56 @@ describe("phase controls", () => {
   });
 });
 
+describe("maintenance", () => {
+  it("offers a problem report only on a finished project", async () => {
+    mockApi({ ...backlogRoute, "GET /projects/1": { ...project, phase: "execution" } });
+    renderApp("/projects/1/backlog");
+    await screen.findByText("Todo app");
+    expect(screen.queryByText("Found a problem after the release?")).not.toBeInTheDocument();
+  });
+
+  it("sends the report and offers the maintenance sprint", async () => {
+    const user = userEvent.setup();
+    const calls = mockApi({
+      ...backlogRoute,
+      "GET /projects/1": { ...project, phase: "done" },
+      "POST /projects/1/maintenance": { ...project, phase: "release", has_more_sprints: true },
+    });
+    renderApp("/projects/1/backlog");
+
+    await user.click(await screen.findByText("Found a problem after the release?"));
+    await user.type(screen.getByLabelText("Problem"), "Empty title is accepted");
+    await user.type(screen.getByLabelText("What happens"), "It returns 201 instead of 422.");
+    await user.selectOptions(screen.getByLabelText("Size (points)"), "3");
+    await user.click(screen.getByRole("button", { name: "Request a fix" }));
+
+    expect(await screen.findByRole("button", { name: "Start Sprint planning" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("The fix is in the backlog");
+    const post = calls.find((c) => c.method === "POST" && c.path === "/projects/1/maintenance");
+    expect(post?.body).toEqual({
+      title: "Empty title is accepted",
+      description: "It returns 201 instead of 422.",
+      points: 3,
+    });
+    expect(screen.queryByText("Found a problem after the release?")).not.toBeInTheDocument();
+  });
+
+  it("shows the server's reason when the report is refused", async () => {
+    const user = userEvent.setup();
+    mockApi({
+      ...backlogRoute,
+      "GET /projects/1": { ...project, phase: "done" },
+      "POST /projects/1/maintenance": () => ({ status: 409, body: { detail: "Only a finished project takes a maintenance request" } }),
+    });
+    renderApp("/projects/1/backlog");
+    await user.click(await screen.findByText("Found a problem after the release?"));
+    await user.type(screen.getByLabelText("Problem"), "A bug");
+    await user.type(screen.getByLabelText("What happens"), "It breaks");
+    await user.click(screen.getByRole("button", { name: "Request a fix" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Only a finished project");
+  });
+});
+
 describe("sprint loop", () => {
   it("offers Sprint planning after the release when another sprint follows", async () => {
     mockApi({

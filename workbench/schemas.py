@@ -50,6 +50,20 @@ class BacklogOutput(AgentOutput):  # Product Owner
     nfrs: list[NfrOut] = []
 
 
+class StoryRefinement(BaseModel):
+    """The refined fields of one backlog story (the whole set, not a patch)."""
+
+    story_id: int
+    acceptance_criteria: list[str] = Field(
+        min_length=2, description="2 to 4 Given/When/Then strings, including an error case")
+    points: Literal[1, 2, 3, 5, 8]
+    priority: int = Field(ge=1, le=5)
+
+
+class RefinementOutput(AgentOutput):  # Product Owner, backlog refinement before sprint planning
+    stories: list[StoryRefinement] = []
+
+
 class TaskOut(BaseModel):
     story_id: int
     title: str

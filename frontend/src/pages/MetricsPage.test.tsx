@@ -33,6 +33,7 @@ function routes(extra: Record<string, unknown> = {}) {
   return {
     "GET /projects/1": project,
     "GET /projects/1/metrics": metrics,
+    "GET /projects/1/release-checks": [],
     "GET /sprints/6/burndown": burndown,
     "GET /sprints/5/burndown": sprintOneBurndown,
     ...extra,
@@ -197,12 +198,71 @@ describe("MetricsPage", () => {
     expect(screen.getAllByText(/Goal-Question-Metric/).length).toBeGreaterThan(0);
   });
 
+  it("shows the release checks of the latest release, split into the app and the requirements", async () => {
+    const check = (name: string, status: string, detail = "") => ({
+      version: "v0.2.0", sprint_id: 6, name, status, detail,
+    });
+    mockApi(
+      routes({
+        "GET /projects/1/release-checks": [
+          { ...check("starts", "failed"), version: "v0.1.0" },
+          check("starts", "passed", "serves its OpenAPI document"),
+          check("serves its contract", "failed", "not served: GET /loans"),
+          check("security scan", "passed", "no common security mistakes found"),
+          check("The API shall respond quickly", "met", "p95 12 ms against 300 ms"),
+          check("Code shall follow standards", "unverified", "no automatic check for this requirement"),
+        ],
+      }),
+    );
+    renderApp("/projects/1/metrics");
+
+    const section = await screen.findByRole("region", { name: "Release checks (v0.2.0)" });
+    const app = within(section).getByRole("table", { name: "The app" });
+    expect(within(app).getAllByRole("rowheader").map((r) => r.textContent)).toEqual([
+      "starts", "serves its contract", "security scan"]);
+    expect(within(within(app).getByText("serves its contract").closest("tr")!).getByText("failed"))
+      .toBeInTheDocument();
+    expect(within(app).getByText("not served: GET /loans")).toBeInTheDocument();
+    const nfr = within(section).getByRole("table", { name: "Non-functional requirements" });
+    expect(within(nfr).getByText("met")).toBeInTheDocument();
+    expect(within(nfr).getByText("unverified")).toBeInTheDocument();
+    expect(within(section).queryByText("v0.1.0")).toBeNull(); // only the latest release
+  });
+
+  it("explains why there are no release checks yet", async () => {
+    mockApi(routes());
+    renderApp("/projects/1/metrics");
+    expect(await screen.findByText(/No release checks yet/)).toBeInTheDocument();
+  });
+
+  it("downloads the report and the project under the project's name", async () => {
+    const user = userEvent.setup();
+    const create = vi.fn(() => "blob:x");
+    vi.stubGlobal("URL", { createObjectURL: create, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const calls = mockApi({
+      ...routes(),
+      "GET /projects/1/report": "# Todo app: project report",
+      "GET /projects/1/export": "zip",
+    });
+    renderApp("/projects/1/metrics");
+
+    await user.click(await screen.findByRole("button", { name: "Download report" }));
+    await user.click(screen.getByRole("button", { name: "Download project" }));
+
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(2));
+    expect(calls.map((c) => c.path)).toEqual(
+      expect.arrayContaining(["/projects/1/report", "/projects/1/export"]),
+    );
+    click.mockRestore();
+  });
+
   it("offers jump links to every section", async () => {
     mockApi(routes());
     renderApp("/projects/1/metrics");
     const nav = await screen.findByRole("navigation", { name: "On this page" });
     const ids = within(nav).getAllByRole("link").map((a) => a.getAttribute("href")?.slice(1));
-    expect(ids).toEqual(["sprints", "detail", "quality", "cost", "releases", "improvement", "method"]);
+    expect(ids).toEqual(["sprints", "detail", "quality", "cost", "checks", "releases", "improvement", "method"]);
     for (const id of ids) expect(document.getElementById(id as string)).not.toBeNull();
   });
 

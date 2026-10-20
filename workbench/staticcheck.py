@@ -34,3 +34,29 @@ def problems(path: str, source: str) -> list[str]:
             shown = f" -- the line is: {code}" if code else ""
             found.append(f"{path} line {row}: {m.group(2)}{shown}")
     return found[:MAX_PROBLEMS]
+
+
+# Common security mistakes in generated code (the ruff "S" rules, from bandit): exec and eval,
+# hard-coded passwords, pickle, unsafe YAML, weak hashes and SQL built from strings.
+SECURITY_RULES = "S102,S105,S106,S107,S301,S307,S324,S506,S608"
+_SECURITY_LINE = re.compile(r"^\S+?:(\d+):\d+: (S\d{3}) (.*)$")
+
+
+def security_findings(path: str, source: str) -> list[str]:
+    """Security problems of one Python file, as 'file line N: S608 message'. Not a refusal: the
+    findings are reported with the release, because a style rule may be wrong for a given app."""
+    cmd = [sys.executable, "-m", "ruff", "check", "--isolated", "--select", SECURITY_RULES,
+           "--output-format", "concise", "--stdin-filename", path, "-"]
+    try:
+        r = subprocess.run(cmd, input=source, capture_output=True, text=True,
+                           timeout=TIMEOUT_SECONDS)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if r.returncode != 1 or "No module named" in r.stderr:
+        return []
+    found = []
+    for line in r.stdout.splitlines():
+        m = _SECURITY_LINE.match(line)
+        if m:
+            found.append(f"{path} line {m.group(1)}: {m.group(2)} {m.group(3)}")
+    return found
