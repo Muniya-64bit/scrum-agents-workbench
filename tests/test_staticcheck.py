@@ -49,3 +49,26 @@ def test_a_timeout_skips_the_check(monkeypatch):
 
     monkeypatch.setattr(staticcheck.subprocess, "run", slow)
     assert staticcheck.problems("app/main.py", "x = missing\n") == []
+
+
+def test_a_nul_character_is_a_syntax_problem_even_without_ruff(monkeypatch):
+    """A live run wrote NUL bytes into app/main.py; the compiler refuses such a file."""
+    monkeypatch.setattr(staticcheck.subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(OSError("no ruff")))
+    (problem,) = staticcheck.problems("app/main.py", "x = 1\x00\n")
+    assert problem.startswith("app/main.py") and "null bytes" in problem
+
+
+def test_syntax_problem_names_the_line_and_is_none_for_good_code():
+    assert staticcheck.syntax_problem("app/main.py", "x = 1\n") is None
+    found = staticcheck.syntax_problem("app/main.py", "x = 1\nif x = 2:\n    pass\n")
+    assert found.startswith("app/main.py line 2:") and "-- the line is: if x = 2:" in found
+
+
+def test_ruff_failing_to_run_does_not_hide_a_compile_error(monkeypatch):
+    class Broken:
+        returncode, stdout, stderr = 2, "", "ruff could not read the input"
+
+    monkeypatch.setattr(staticcheck.subprocess, "run", lambda *a, **k: Broken())
+    assert staticcheck.problems("app/main.py", "def f(:\n") != []  # the compiler still decides
+    assert staticcheck.problems("app/main.py", "x = missing\n") == []  # ruff's part is skipped

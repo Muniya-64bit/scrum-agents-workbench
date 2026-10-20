@@ -30,7 +30,7 @@ from workbench.db import repo
 from workbench.llm.client import LLMClient
 from workbench.process import effective_process, fix_retry_limit
 from workbench.schemas import CodeOutput
-from workbench.workspace import UnsafePath, Workspace, repo_path
+from workbench.workspace import UnsafePath, Workspace, clean_text, repo_path
 
 MAX_FIX_RETRIES = 3  # default when neither the task nor the sprint's process sets a limit
 ARCHITECTURE_CHARS = 4000  # how much of the architecture overview goes into the prompt
@@ -254,7 +254,7 @@ class DeveloperAgent(BaseAgent):
             except UnsafePath:
                 continue
             if path.startswith("app/") and path.endswith(".py"):
-                reasons += staticcheck.problems(path, f.content)
+                reasons += staticcheck.problems(path, clean_text(f.content))
         return reasons
 
     def _removed_routes(self, ws: Workspace, files: list) -> list[contract.Endpoint]:
@@ -297,8 +297,11 @@ class DeveloperAgent(BaseAgent):
         for f in out.files:
             try:
                 path = ws.resolve(repo_path(f.path)).relative_to(ws.path).as_posix()
+                if "\x00" in f.content:
+                    tools.log("file_cleaned", f"Removed NUL characters from {path}",
+                              story_id=story.id)
                 if ws.write(path, f.content):
-                    changed[path] = f.content
+                    changed[path] = clean_text(f.content)
             except UnsafePath:
                 tools.log("file_rejected", f.path, story_id=story.id)
 

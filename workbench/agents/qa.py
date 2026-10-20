@@ -21,7 +21,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import config, contract, runner
+from workbench import config, contract, runner, staticcheck
 from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
@@ -29,7 +29,7 @@ from workbench.db import repo
 from workbench.llm.client import LLMClient
 from workbench.process import fix_retry_limit
 from workbench.schemas import CodeOutput
-from workbench.workspace import UnsafePath, Workspace, repo_path
+from workbench.workspace import UnsafePath, Workspace, clean_text, repo_path
 
 FILES_CHARS = 12000  # budget for code shown to the LLM
 DESIGN_CHARS = 4000  # per design / API artifact shown when writing tests before the code
@@ -68,7 +68,8 @@ def _code_error(output: str) -> bool:
 
 def _test_side(f: runner.Failure, output: str = "") -> bool:
     """True when the test code itself is broken (and not the application it imports)."""
-    return (not f.test.startswith("contract") and not _code_error(output)
+    return (not f.test.startswith("contract") and f.test != "app code"
+            and not _code_error(output)
             and (f.test in ("collection", "pytest") or bool(_TEST_SIDE.search(f.message))))
 
 
@@ -207,12 +208,19 @@ class QAAgent(BaseAgent):
         for attempt in range(max_retries + 1):
             result = runner.run_pytest(self.workspace(project_id).path, targets, self.timeout)
             result.failures[:0] = self._contract_failures(db, project_id, story)
+            broken = self._broken_app_files(project_id)
+            if broken:  # the tests only fail to import: the plain reason replaces that noise
+                result.failures = [f for f in result.failures
+                                   if f.test not in ("collection", "pytest")
+                                   and "collection failure" not in f.message]
+            result.failures[:0] = [runner.Failure("app code", b) for b in broken]
             self._record(tools, story, result)
             if result.ok:
                 return True
             if attempt == max_retries:
                 break
-            if any(_test_side(f, result.output) for f in result.failures):  # tests are wrong
+            # a test that cannot even import the app is not wrong when the app does not compile
+            if not broken and any(_test_side(f, result.output) for f in result.failures):
                 if not self._revise_tests(db, tools, story, task, result):
                     break  # the same file again: another attempt would repeat this one
                 continue
@@ -231,6 +239,18 @@ class QAAgent(BaseAgent):
             tools.log("bugs_left_open", f"Story #{story.id} still fails after the fix attempts",
                       story_id=story.id)
         return False
+
+    def _broken_app_files(self, project_id: int) -> list[str]:
+        """The `app/*.py` files that Python cannot compile. The test run only shows this as an
+        import error of the test, which looks like a mistake of the test, so say it plainly."""
+        ws = self.workspace(project_id)
+        found = []
+        for path in ws.text_files():
+            if path.startswith("app/") and path.endswith(".py"):
+                problem = staticcheck.syntax_problem(path, ws.read(path))
+                if problem:
+                    found.append(problem)
+        return found
 
     def _contract_failures(self, db: Session, project_id: int,
                            story: m.UserStory) -> list[runner.Failure]:
@@ -391,8 +411,10 @@ class QAAgent(BaseAgent):
                 tools.log("file_rejected", f"{f.path} (QA may only write tests/*.py)",
                           story_id=story.id)
                 continue
+            if "\x00" in f.content:
+                tools.log("file_cleaned", f"Removed NUL characters from {path}", story_id=story.id)
             if ws.write(path, f.content):
-                changed[path] = f.content
+                changed[path] = clean_text(f.content)
         if changed:  # scaffolded with the first tests, in the same commit
             ws.write("pytest.ini", PYTEST_INI)
             ws.write(".gitignore", GITIGNORE)

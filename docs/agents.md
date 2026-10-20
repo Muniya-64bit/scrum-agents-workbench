@@ -234,6 +234,16 @@ completed however good the code was.
   counts as a failed fix attempt. A route that moved behind a router prefix is not a removal.
   Events: `code_rejected`.
 
+### NUL characters and files that do not compile
+A live model once wrote NUL bytes into `app/main.py`. Python refuses such a file, QA only saw its test
+fail to import the app (which looks like a mistake of the test), revised its tests, got the same file
+back and filed no bug, so nobody fixed the app and two sprints idled. Three rules now stop it:
+`Workspace.write` strips NUL characters from everything it writes (the Developer and QA log
+`file_cleaned`); `staticcheck.problems` compiles a file first (`syntax_problem`), so a syntax error or
+a NUL is caught even when ruff cannot run; and QA checks the `app/*.py` files itself
+(`_broken_app_files`): one that does not compile becomes a bug `app code: <file> line N: <message>`
+for the Developer, and the test is not revised.
+
 ### API contract
 The Architect's per-story design carries `endpoints`, each with method, path, purpose,
 `request_fields`, `success_status` and `error_statuses` (at least one per story). `workbench/contract.py`

@@ -228,3 +228,18 @@ def test_the_api_lists_the_checks_of_every_release(db: Session):
         assert client.get("/projects/999/release-checks").status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+
+def test_a_failed_start_shows_the_error_not_a_frame(tmp_path):
+    source = "from fastapi import FastAPI\nimport not_installed_anywhere\napp = FastAPI()\n"
+    checks, _ = release_checks.smoke_test(_app(tmp_path, source), [])
+    assert checks[0].status == "failed"
+    assert checks[0].detail.startswith("ModuleNotFoundError: No module named")
+
+
+def test_the_error_line_prefers_the_named_error_over_the_last_line():
+    stderr = ("Traceback (most recent call last):\n  File \"x.py\", line 3, in <module>\n"
+              "    import y\nImportError: cannot import name y\nERROR:    Application failed\n")
+    assert release_checks._error_line(stderr) == "ImportError: cannot import name y"
+    assert release_checks._error_line("just one line\n") == "just one line"
+    assert release_checks._error_line("") == ""

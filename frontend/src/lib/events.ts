@@ -125,6 +125,8 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
       return { text: m, tone: e.payload.after === 0 ? "done" : "testing" };
     case "refinement_skipped":
       return { text: m, tone: "neutral" };
+    case "file_cleaned":
+      return { text: m, tone: "testing" };
     case "agent_message":
       return { text: `Told the ${roleLabel(String(e.payload.to ?? ""))}: ${m}`, tone: "accent" };
     case "tests_revised":

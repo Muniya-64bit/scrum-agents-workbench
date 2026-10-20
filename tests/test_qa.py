@@ -259,8 +259,25 @@ def test_a_syntax_error_in_app_code_is_the_developers_bug(
     QAAgent(qa_llm, developer=developer).run(db, project.id, EXECUTION)
     kinds = _kinds(db, project.id)
     assert "tests_revised" not in kinds and "tests_revision_unchanged" not in kinds
+    (bug,) = repo.bugs(db, project.id)  # one bug, not one more for the failed import
+    assert bug.description.startswith(f"app code: app/features/story_{coded.id}.py line 1:")
+    assert "-- the line is: def f(a=1, b):" in bug.description
+
+
+def test_an_app_with_a_nul_character_is_reported_not_blamed_on_the_tests(
+        db: Session, project: m.Project, coded: m.UserStory, monkeypatch):
+    """A live run wrote NUL bytes into app/main.py. QA saw a failed import of its test, revised
+    its tests, got the same file back and filed no bug, so nobody fixed the app."""
+    path = Workspace(project.id).path / "app" / "features" / f"story_{coded.id}.py"
+    path.write_bytes(b"value = 1\x00\n")  # bypasses Workspace.write, which would clean it
+    developer = DeveloperAgent(_fake_llm(monkeypatch, _fix_reply(coded, "Create an item")))
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "Create an item"))
+    QAAgent(qa_llm, developer=developer).run(db, project.id, EXECUTION)
+    kinds = _kinds(db, project.id)
+    assert "tests_revised" not in kinds and "tests_revision_unchanged" not in kinds
     (bug,) = repo.bugs(db, project.id)
-    assert "SyntaxError" in bug.description
+    assert bug.description.startswith("app code: ") and "null bytes" in bug.description
+    assert "bug_fixed" in kinds  # the Developer was asked, and its rewrite replaced the file
 
 
 def test_an_unchanged_rewrite_stops_the_loop(db: Session, project: m.Project,

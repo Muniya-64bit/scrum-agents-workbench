@@ -320,6 +320,20 @@ def test_prompt_says_how_many_earlier_attempts_failed(db: Session, project: m.Pr
     assert "change your approach" in again
 
 
+def test_nul_characters_are_removed_before_a_file_is_written(db: Session, project: m.Project,
+                                                           monkeypatch):
+    """A live model put NUL bytes into app/main.py, so Python refused the whole file."""
+    dirty = _main("from fastapi import FastAPI\x00\napp = FastAPI()\x00\n")
+    DeveloperAgent(_fake_llm(monkeypatch, dirty)).run(db, project.id, EXECUTION)
+    text = Workspace(project.id).read("app/main.py")
+    assert "\x00" not in text and text == "from fastapi import FastAPI\napp = FastAPI()\n"
+    assert "code_rejected" not in _kinds(db, project.id)  # cleaned, not refused
+    (event,) = [e for e in repo.events_since(db, project.id) if e.kind == "file_cleaned"]
+    assert event.message == "Removed NUL characters from app/main.py"
+    artifact = repo.artifacts(db, project.id, "code")[-1]
+    assert "\x00" not in artifact.content
+
+
 def test_story_id_task_builds_that_story_only(db: Session, project: m.Project):
     other = _story(db, project, "Delete an item")  # not in a sprint, but asked for directly
     DeveloperAgent().run(db, project.id, {**EXECUTION, "story_id": other.id})

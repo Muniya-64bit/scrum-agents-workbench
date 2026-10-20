@@ -53,6 +53,13 @@ def _get(url: str) -> tuple[int, float]:
         return 0, time.perf_counter() - started
 
 
+def _error_line(stderr: str) -> str:
+    """The line of a traceback that names the error ('SyntaxError: ...'), else its last line."""
+    lines = [line.strip() for line in stderr.strip().splitlines() if line.strip()]
+    named = [line for line in lines if re.match(r"^\w*(Error|Exception)\b", line)]
+    return (named or lines or [""])[-1][:200]
+
+
 def _norm(path: str) -> str:
     return re.sub(r"\{[^}]*\}", "{}", path.rstrip("/") or "/")
 
@@ -83,7 +90,7 @@ def smoke_test(workspace: Path, endpoints: list[Endpoint]) -> tuple[list[Check],
         if status != 200:
             tail = ""
             if proc.poll() is not None and proc.stderr:
-                tail = " ".join(proc.stderr.read().strip().splitlines()[-2:])[:200]
+                tail = _error_line(proc.stderr.read())
             return [Check("starts", "failed", tail or "the app did not answer in time")], None
         checks = [Check("starts", "passed", "serves its OpenAPI document")]
         with urllib.request.urlopen(f"{base}/openapi.json", timeout=REQUEST_SECONDS) as r:

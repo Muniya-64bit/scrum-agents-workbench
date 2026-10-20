@@ -298,6 +298,13 @@ def test_workspace_rejects_unsafe_paths(tmp_path, bad):
         ws.write(bad, "x")
 
 
+def test_workspace_never_writes_a_nul_character(tmp_path):
+    ws = Workspace(1, tmp_path).init()
+    assert ws.write("app/main.py", "a = 1\x00\nb = 2\x00\n") is True
+    assert ws.read("app/main.py") == "a = 1\nb = 2\n"
+    assert ws.write("app/main.py", "a = 1\nb = 2\x00\n") is False  # the cleaned text is the same
+
+
 def test_workspace_accepts_nested_and_backslash_paths(tmp_path):
     ws = Workspace(1, tmp_path).init()
     ws.write("app\\routes\\items.py", "x = 1")
