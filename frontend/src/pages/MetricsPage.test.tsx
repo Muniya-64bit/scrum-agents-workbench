@@ -82,6 +82,19 @@ describe("MetricsPage", () => {
     expect(screen.getByText("Users can add items")).toBeInTheDocument(); // the goal of sprint 1
   });
 
+  it("says what each sprint did, and why it did not finish what it planned", async () => {
+    mockApi(routes());
+    renderApp("/projects/1/metrics");
+    const table = await screen.findByRole("table", { name: "Planned and completed work for every sprint" });
+    // Sprint 1 planned 3 stories and completed 2; sprint 2 completed everything it planned
+    expect(
+      within(table).getByText(/4 test runs, 80.0% passed · 2 bugs found · 2 fix attempts, 1 fixed/),
+    ).toBeInTheDocument();
+    expect(within(table).getByText(/some tests still failed; 1 bug is still open/)).toBeInTheDocument();
+    expect(within(table).getAllByText("Not completed because:")).toHaveLength(1);
+    expect(within(table).getAllByText("What happened:")).toHaveLength(2);
+  });
+
   it("keeps the charts to a sensible size and describes them", async () => {
     mockApi(routes());
     renderApp("/projects/1/metrics");

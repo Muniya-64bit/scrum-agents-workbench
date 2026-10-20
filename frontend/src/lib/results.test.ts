@@ -6,8 +6,10 @@ import {
   meterRows,
   modeLine,
   previousSprint,
+  sprintActivity,
   summarizeOutcome,
   verdictFor,
+  whyNotCompleted,
 } from "./results";
 
 describe("verdictFor", () => {
@@ -91,5 +93,41 @@ describe("labels", () => {
     expect(modeLine({ ...metrics, project: { ...metrics.project, llm_modes: ["mock"] } })).toBe(
       "Mock run: no model was called, so no tokens were spent.",
     );
+  });
+});
+
+describe("what a sprint did", () => {
+  const [first, second] = metrics.sprints;
+  // Sprint 1 of the fixture: 4 runs, 80% passed, 2 bugs, 2 fix attempts of which 1 fixed, 1 limit hit
+  it("lists the effort in plain words", () => {
+    expect(sprintActivity(first)).toEqual([
+      "4 test runs, 80.0% passed",
+      "2 bugs found",
+      "2 fix attempts, 1 fixed",
+      "gave up on 1 bug after the retry limit",
+    ]);
+  });
+
+  it("says so when nothing ran and when no fix worked", () => {
+    const idle = { ...first, test_runs: 0, bugs_reported: 0, fix_attempts: 0, retry_limit_hits: 0 };
+    expect(sprintActivity(idle)).toEqual(["no tests ran"]);
+    const failing = { ...first, test_runs: 1, test_pass_rate: 0, bugs_reported: 1, bugs_fixed_in_sprint: 0 };
+    expect(sprintActivity(failing)).toContain("2 fix attempts, none fixed");
+  });
+
+  it("explains why a sprint did not complete everything", () => {
+    expect(whyNotCompleted(first)).toBe(
+      "some tests still failed; 1 bug is still open; 1 story carried to the next sprint",
+    );
+    const none = { ...first, completed_stories: 0, test_pass_rate: 0, bugs_open_at_end: 4 };
+    expect(whyNotCompleted(none)).toBe(
+      "tests ran but none passed; 4 bugs are still open; 3 stories carried to the next sprint",
+    );
+    const idle = { ...first, completed_stories: 0, test_runs: 0, fix_attempts: 0, bugs_open_at_end: 0 };
+    expect(whyNotCompleted(idle)).toMatch(/^no tests ran, so no story could pass/);
+  });
+
+  it("has no reason when everything planned was completed", () => {
+    expect(whyNotCompleted({ ...second, completed_stories: second.committed_stories })).toBeNull();
   });
 });

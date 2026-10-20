@@ -119,3 +119,41 @@ export function modeLine(data: ProjectMetrics): string {
   }
   return `Live run (${modes.join(", ")}) with ${data.pricing.model}.`;
 }
+
+const times = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** What the team did in a sprint, in plain words. Reads the same numbers as the quality table,
+ *  so a sprint that completed nothing still shows its effort. */
+export function sprintActivity(s: SprintMetrics): string[] {
+  const parts: string[] = [];
+  parts.push(
+    s.test_runs > 0
+      ? `${times(s.test_runs, "test run", "test runs")}, ${pct(s.test_pass_rate)} passed`
+      : "no tests ran",
+  );
+  if (s.bugs_reported > 0) parts.push(`${times(s.bugs_reported, "bug", "bugs")} found`);
+  if (s.fix_attempts > 0) {
+    parts.push(
+      s.bugs_fixed_in_sprint > 0
+        ? `${times(s.fix_attempts, "fix attempt", "fix attempts")}, ${s.bugs_fixed_in_sprint} fixed`
+        : `${times(s.fix_attempts, "fix attempt", "fix attempts")}, none fixed`,
+    );
+  }
+  if (s.retry_limit_hits > 0) {
+    parts.push(`gave up on ${times(s.retry_limit_hits, "bug", "bugs")} after the retry limit`);
+  }
+  return parts;
+}
+
+/** Why the sprint did not complete everything it planned; null when it did. */
+export function whyNotCompleted(s: SprintMetrics): string | null {
+  if (s.completed_stories >= s.committed_stories) return null;
+  const reasons: string[] = [];
+  if (s.test_runs === 0 && s.fix_attempts === 0) reasons.push("no tests ran, so no story could pass");
+  else if (s.test_pass_rate === 0) reasons.push("tests ran but none passed");
+  else reasons.push("some tests still failed");
+  if (s.bugs_open_at_end > 0) reasons.push(`${times(s.bugs_open_at_end, "bug is", "bugs are")} still open`);
+  const carried = s.committed_stories - s.completed_stories;
+  reasons.push(`${times(carried, "story", "stories")} carried to the next sprint`);
+  return reasons.join("; ");
+}

@@ -1,6 +1,8 @@
+import { Fragment } from "react";
+
 import type { SprintMetrics } from "../../api/types";
 import { pct, pts } from "../../lib/format";
-import { meterRows } from "../../lib/results";
+import { meterRows, sprintActivity, whyNotCompleted } from "../../lib/results";
 import { BarChart } from "../charts/BarChart";
 import { Section } from "./Section";
 
@@ -32,28 +34,31 @@ export function SprintComparison({ sprints }: { sprints: SprintMetrics[] }) {
           </thead>
           <tbody>
             {rows.map(({ sprint: s, plannedWidth, completedWidth }) => (
-              <tr key={s.sprint_id}>
-                <th scope="row">
-                  Sprint {s.sprint_number}
-                  {s.goal && <span className="row-note">{s.goal}</span>}
-                </th>
-                <td className="num">
-                  {s.committed_stories} {s.committed_stories === 1 ? "story" : "stories"} ·{" "}
-                  {pts(s.committed_points)}
-                </td>
-                <td className="num">
-                  {s.completed_stories} {s.completed_stories === 1 ? "story" : "stories"} ·{" "}
-                  {pts(s.completed_points)}
-                </td>
-                <td className="meter-col">
-                  <div className="meter" aria-hidden="true">
-                    <div className="meter-planned" style={{ width: `${plannedWidth}%` }} />
-                    <div className="meter-done" style={{ width: `${completedWidth}%` }} />
-                  </div>
-                </td>
-                <td className="num">{s.carried_over_stories}</td>
-                <td className="num">{pct(s.commitment_reliability)}</td>
-              </tr>
+              <Fragment key={s.sprint_id}>
+                <tr className="sprint-row">
+                  <th scope="row">
+                    Sprint {s.sprint_number}
+                    {s.goal && <span className="row-note">{s.goal}</span>}
+                  </th>
+                  <td className="num">
+                    {s.committed_stories} {s.committed_stories === 1 ? "story" : "stories"} ·{" "}
+                    {pts(s.committed_points)}
+                  </td>
+                  <td className="num">
+                    {s.completed_stories} {s.completed_stories === 1 ? "story" : "stories"} ·{" "}
+                    {pts(s.completed_points)}
+                  </td>
+                  <td className="meter-col">
+                    <div className="meter" aria-hidden="true">
+                      <div className="meter-planned" style={{ width: `${plannedWidth}%` }} />
+                      <div className="meter-done" style={{ width: `${completedWidth}%` }} />
+                    </div>
+                  </td>
+                  <td className="num">{s.carried_over_stories}</td>
+                  <td className="num">{pct(s.commitment_reliability)}</td>
+                </tr>
+                <ActivityRow sprint={s} />
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -75,5 +80,24 @@ export function SprintComparison({ sprints }: { sprints: SprintMetrics[] }) {
         </div>
       )}
     </Section>
+  );
+}
+
+/** The line under a sprint: what the team did, and why it did not complete everything. */
+function ActivityRow({ sprint }: { sprint: SprintMetrics }) {
+  const why = whyNotCompleted(sprint);
+  return (
+    <tr className="activity-row">
+      <td colSpan={6}>
+        <p>
+          <strong>What happened:</strong> {sprintActivity(sprint).join(" · ")}.
+        </p>
+        {why && (
+          <p>
+            <strong>Not completed because:</strong> {why}.
+          </p>
+        )}
+      </td>
+    </tr>
   );
 }

@@ -2594,3 +2594,23 @@ details[open] > .story-summary::before {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.activity-row td {
+  padding: 0 12px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.activity-row p {
+  margin: 0;
+}
+
+.activity-row strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sprint-row th,
+.sprint-row td {
+  border-bottom: 0;
+}
