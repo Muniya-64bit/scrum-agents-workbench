@@ -5,6 +5,7 @@ import { ApiError, api } from "../api/client";
 import type { ActivityEvent, ProcessInfo, Project } from "../api/types";
 import { ApprovalCard } from "../components/ApprovalCard";
 import { Avatar } from "../components/Avatar";
+import { ClampedText } from "../components/ClampedText";
 import { PhaseBar } from "../components/PhaseBar";
 import { useToast } from "../components/Toast";
 import { IconArrowRight, IconCheck, IconChevronLeft, IconFolder } from "../components/icons";
@@ -94,7 +95,7 @@ export function ProjectLayout() {
         <div className="page-header-row">
           <div className="page-title-block">
             <h1 className="page-title">{project.name}</h1>
-            <p className="page-subtitle">{project.idea}</p>
+            <ClampedText className="page-subtitle" text={project.idea} />
           </div>
           <PhaseActions project={project} onChange={onChange} latest={latest} />
         </div>

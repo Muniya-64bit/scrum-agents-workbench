@@ -29,7 +29,7 @@ function checkValue(key: keyof ImprovementCheck, value: number | null): string {
 export function PdcaPanel({ projectId, version }: { projectId: number; version: number }) {
   const res = useResource(() => api.improvement(projectId), [projectId, version]);
   return (
-    <section className="panel metrics-panel" aria-labelledby="pdca-heading">
+    <section id="improvement" className="panel metrics-panel" aria-labelledby="pdca-heading">
       <h2 id="pdca-heading" className="metrics-panel-title">
         Process improvement (PDCA)
       </h2>
@@ -141,10 +141,11 @@ export function ReleasesPanel({ projectId, version }: { projectId: number; versi
   const releases: Release[] = res.data ?? [];
 
   return (
-    <section className="panel metrics-panel" aria-labelledby="releases-heading">
+    <section id="releases" className="panel metrics-panel" aria-labelledby="releases-heading">
       <h2 id="releases-heading" className="metrics-panel-title">
         Releases
       </h2>
+      <p className="muted metrics-note">One tagged release per sprint, with the stories it contains.</p>
       {res.error && !res.data ? (
         <ErrorState error={res.error} onRetry={res.reload} />
       ) : !res.data ? (

@@ -30,8 +30,7 @@ CI runs typecheck, tests and build on every pull request.
 | `/projects/:id/backlog` | Vision, stats, epics and stories with Given/When/Then criteria |
 | `/projects/:id/board` | Kanban board for the latest sprint (or every task before planning) |
 | `/projects/:id/activity` | Live activity feed with agent filters, and the approval card at a gate |
-| `/projects/:id/metrics` | GQM dashboard: KPI tiles, burndown, velocity, quality, AI cost and the GQM goals ([metrics.md](metrics.md)) |
-| `/projects/:id/metrics` (lower sections) | Releases table (version opens the notes in the drawer) and "Process improvement (PDCA)": one Plan / Do / Check / Act card per sprint with delta badges (arrow, sign, colour) and chips for the retro's proposed changes |
+| `/projects/:id/metrics` | **Results**: what the project delivered, sprint by sprint, how well, at what cost. See "Results page" below |
 | `/projects/:id/traceability` | Story → design → code → tests → release matrix with results, gaps and an artifact viewer. Filters (`?sprint=`, `?status=`, `?gaps=1`) are kept in the URL |
 | `/inbox` | Approval inbox: every project waiting at a gate, across projects |
 
@@ -45,6 +44,30 @@ Every project page shows the phase bar and the phase controls: **Start &lt;next 
 
 On the board, drag a card to another column or use the status menu on the card (keyboard
 friendly). The card moves at once; if saving fails it moves back and an error toast explains why.
+
+## Results page
+The page answers one question first: *what did the project deliver?* Each section says what it
+shows under its title, and every number has a plain-language definition (from the GQM metrics,
+[metrics.md](metrics.md)).
+
+| Section | What it shows |
+|---|---|
+| Project outcome | A verdict (Complete, In progress, Nothing delivered), the points and stories delivered of the total, sprints run, latest test pass rate, open bugs, lines of code, and whether the run was mock or live |
+| Sprint by sprint | Every sprint side by side: planned and completed stories and points, carried over, reliability, with a meter of planned against completed |
+| Sprint detail | One sprint in focus (a switcher, the latest closed sprint first): its goal, five key measures with their meaning and the change since the sprint before, and its burndown |
+| Quality | Test runs, pass rate, first-pass yield and bugs per sprint; the debugging columns sit behind "Show all columns", and a help block defines each column |
+| Cost of the AI team | Model calls, tokens and estimated cost; a local model is shown as free; the per-sprint breakdown is behind a toggle |
+| Releases, Improvement | One release per sprint, and the Plan-Do-Check-Act card of each sprint |
+| How the metrics were chosen | The GQM goals, questions and metrics |
+
+Jump links at the top lead to each section. Charts are capped at 560 px wide so they stay readable
+on wide screens.
+
+**Code.** The rules (verdict, default sprint, planned-against-completed bar widths, metric
+definitions, whether a model is free) are pure functions in `src/lib/results.ts` with unit tests.
+Each section is its own small component in `src/components/results/`, and `pages/MetricsPage.tsx`
+only composes them. A table that repeats a column pattern is driven by a list (`QualityTable`,
+`SprintDetail`), not by copied markup.
 
 ## Live updates
 Each project page opens one Server-Sent Events connection (`useEventStream`): it loads the history
@@ -76,7 +99,7 @@ frontend/src/
                 events.ts (event text, times), useEventStream.ts (SSE),
                 useResource.ts (data loading), usePolling.ts, projectsChanged.ts, theme.ts
   pages/        ProjectsPage, ProjectLayout (header, phase controls, live stream), BacklogPage,
-                BoardPage, ActivityPage, MetricsPage, TraceabilityPage, InboxPage
+                BoardPage, ActivityPage, MetricsPage (composes components/results/), TraceabilityPage, InboxPage
   styles/       tokens.css (colors, light/dark), app.css
   test/         fake API (mockApi), fake EventSource, render helper, fixtures
 ```

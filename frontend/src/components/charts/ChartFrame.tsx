@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from "react";
 
 /** Fixed drawing area; the SVG scales to its container with `width="100%"`. */
-export const VIEW = { width: 640, height: 260 };
+export const VIEW = { width: 560, height: 240 };
 export const MARGIN = { left: 44, right: 16, top: 16, bottom: 36 };
 export const PLOT = {
   x0: MARGIN.left,

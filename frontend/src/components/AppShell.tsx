@@ -64,7 +64,7 @@ export function AppShell() {
                 <IconActivity /> <span>Activity</span>
               </NavLink>
               <NavLink to={`/projects/${projectId}/metrics`} className="nav-link">
-                <IconChart /> <span>Metrics</span>
+                <IconChart /> <span>Results</span>
               </NavLink>
               <NavLink to={`/projects/${projectId}/traceability`} className="nav-link">
                 <IconLink /> <span>Traceability</span>
