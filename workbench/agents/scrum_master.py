@@ -61,6 +61,47 @@ def _select_stories(candidates: list[m.UserStory], requested: list[int], capacit
     return chosen
 
 
+PARK_AFTER_CARRY_OVERS = 2  # sprints a story with an open bug gets before the team moves on
+
+
+def _blocked_ids(db: Session, project_id: int) -> set[int]:
+    """Stories with an open bug that were carried over twice: they had two sprints with fresh
+    attempts and still do not pass. They are planned after other work, so one stuck story
+    cannot take sprint after sprint while the rest of the backlog waits."""
+    carried: dict[int, int] = {}
+    for e in repo.events_since(db, project_id):
+        if e.kind == "story_carried_over":
+            carried[e.payload["story_id"]] = carried.get(e.payload["story_id"], 0) + 1
+    with_open_bug = {b.story_id for b in repo.bugs(db, project_id, "open")}
+    return {sid for sid in with_open_bug if carried.get(sid, 0) >= PARK_AFTER_CARRY_OVERS}
+
+
+def _top_up(chosen: list, pool: list[m.UserStory], capacity: int) -> list:
+    """Add stories from `pool`, in order, while they fit: spare capacity is not left empty."""
+    used = sum(s.points for s in chosen)
+    have = {s.id for s in chosen}
+    for story in pool:
+        if story.id not in have and used + story.points <= capacity:
+            chosen.append(story)
+            used += story.points
+    return chosen
+
+
+def plan_stories(candidates: list[m.UserStory], requested: list[int], capacity: int,
+                 blocked: set[int], fill: bool = True) -> list[m.UserStory]:
+    """The stories of a sprint: the model's picks that are not blocked, then other stories by
+    priority until the capacity is full, and blocked stories only if room is left.
+
+    With `fill=False` (the human rejected the last plan as too big) the sprint is not topped up."""
+    if not fill:
+        return _select_stories(candidates, requested, capacity)
+    fresh = [s for s in candidates if s.id not in blocked]
+    stuck = [s for s in candidates if s.id in blocked]
+    chosen = _select_stories(fresh, requested, capacity)
+    chosen = _top_up(chosen, fresh, capacity)
+    return _top_up(chosen, stuck, capacity)
+
+
 # Only these agents ever mark a task done (the Developer when it commits, QA when the tests pass).
 # A task for any other role would stay open forever and the story could never be completed.
 TASK_ROLES = ("developer", "qa")
@@ -79,7 +120,9 @@ Rules:
 - assignee must be developer or qa. Implementation goes to developer, tests to qa. No other
   role takes tasks.
 - If retro actions from the previous sprint are listed, plan so that they are followed.
-- Stories marked (carried over) were not finished last sprint; plan them first.
+- Stories marked (carried over) were not finished last sprint; plan them first, except those
+  marked (blocked): they were carried over twice with a bug still open, so plan them last and only
+  if room is left. Fill the capacity with other stories instead.
 - summary is one sentence."""
 
     def _process(self, db: Session, project_id: int, task: dict):
@@ -94,10 +137,12 @@ Rules:
         project = repo.get(db, m.Project, project_id)
         cfg, diff, reason, capacity = self._process(db, project_id, task)
         carried = _carried_over_ids(db, project_id)
+        blocked = _blocked_ids(db, project_id)
         lines = [f"Vision: {project.vision or project.idea}", f"Sprint capacity: {capacity} points",
                  "", "Backlog (id | priority | points | title):"]
         for s in repo.unplanned_stories(db, project_id):
             mark = " (carried over)" if s.id in carried else ""
+            mark += " (blocked)" if s.id in blocked else ""
             lines.append(f"{s.id} | {s.priority} | {s.points} | {s.title}{mark}")
         lines += ["", "Process for this sprint:", *_describe_process(cfg)]
         if diff:
@@ -116,7 +161,9 @@ Rules:
 
     def mock_output(self, db: Session, project_id: int, task: dict) -> dict:
         capacity = self._process(db, project_id, task)[3]
-        chosen = _select_stories(repo.unplanned_stories(db, project_id), [], capacity)
+        chosen = plan_stories(repo.unplanned_stories(db, project_id), [], capacity,
+                              _blocked_ids(db, project_id),
+                              fill=_rejected_sprint(db, project_id) is None)
         if _rejected_sprint(db, project_id) and len(chosen) > 1:
             chosen = chosen[:-1]  # the plan was rejected: commit to less
         tasks = []
@@ -132,8 +179,9 @@ Rules:
     def apply(self, tools: Tools, out: BaseModel, task: dict) -> None:
         assert isinstance(out, SprintPlanOutput)
         cfg, diff, reason, capacity = self._process(tools.db, tools.project_id, task)
-        chosen = _select_stories(repo.unplanned_stories(tools.db, tools.project_id),
-                                 out.story_ids, capacity)
+        chosen = plan_stories(repo.unplanned_stories(tools.db, tools.project_id), out.story_ids,
+                              capacity, _blocked_ids(tools.db, tools.project_id),
+                              fill=_rejected_sprint(tools.db, tools.project_id) is None)
         if not chosen:
             tools.log("sprint_skipped", "No planned stories fit the sprint")
             return
@@ -142,7 +190,8 @@ Rules:
                   else tools.create_sprint(out.goal, capacity))
         for story in chosen:
             tools.add_story_to_sprint(sprint.id, story.id)
-            if _has_tasks(tools.db, story.id):  # carried over: keep its tasks
+            if _has_tasks(tools.db, story.id):  # carried over: keep its tasks, fresh attempts
+                tools.reset_bug_attempts(story.id)
                 continue
             roles = set()
             for t in (t for t in out.tasks if t.story_id == story.id):

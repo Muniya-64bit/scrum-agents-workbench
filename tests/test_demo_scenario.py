@@ -100,7 +100,7 @@ def test_defects_are_found_fixed_and_carried_over(story):
         "Create item", "List items", "Complete item", "Delete item", "Edit title",
         "Filter by status"]
     bugs = db.query(m.Bug).order_by(m.Bug.id).all()
-    assert [(b.story_id, b.status, b.retries) for b in bugs] == [(1, "fixed", 1), (4, "fixed", 2)]
+    assert [(b.story_id, b.status, b.retries) for b in bugs] == [(1, "fixed", 1), (4, "fixed", 1)]
     assert "expected 422 for an empty title, got 201" in bugs[0].description
     assert "expected 404 for an unknown id, got 200" in bugs[1].description
     assert "TestClient object" not in bugs[1].description  # readable on the board and feed

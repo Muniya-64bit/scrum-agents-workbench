@@ -80,6 +80,15 @@ def _error_line(output: str) -> str:
     return m.group(1).strip()[:200] if m else ""
 
 
+TEST_REVIEW_AFTER = 2  # failed Developer attempts on a test that runs, before QA doubts the test
+
+
+def _failed_twice(bugs: list[m.Bug]) -> bool:
+    """The Developer used up its first attempts on an open bug and the test still fails."""
+    return any(b.status == "open" and b.retries >= TEST_REVIEW_AFTER
+               and not b.description.startswith("contract ") for b in bugs)
+
+
 def _tests_for(db: Session, project_id: int, story_id: int) -> list[str]:
     paths = {a.path for link, a in repo.trace_links(db, project_id)
              if link.story_id == story_id and link.relation == "test" and a.path}
@@ -194,6 +203,7 @@ class QAAgent(BaseAgent):
         if not targets:
             tools.log("tests_missing", f"No valid tests for story #{story.id}", story_id=story.id)
             return False
+        reviewed = False  # QA doubts a test at most once per run
         for attempt in range(max_retries + 1):
             result = runner.run_pytest(self.workspace(project_id).path, targets, self.timeout)
             result.failures[:0] = self._contract_failures(db, project_id, story)
@@ -205,7 +215,13 @@ class QAAgent(BaseAgent):
             if any(_test_side(f, result.output) for f in result.failures):  # tests are wrong
                 if not self._revise_tests(db, tools, story, task, result):
                     break  # the same file again: another attempt would repeat this one
-            elif self.developer is not None and _fixable(_bugs(db, story.id), max_retries):
+                continue
+            if not reviewed and _failed_twice(_bugs(db, story.id)):
+                reviewed = True  # the Developer failed twice: is the test itself wrong?
+                if self._revise_tests(db, tools, story, task, result, review=True):
+                    tools.reset_bug_attempts(story.id)  # a corrected test: a fresh start
+                    continue
+            if self.developer is not None and _fixable(_bugs(db, story.id), max_retries):
                 self.developer.run(db, project_id, {"name": "bug fix", "phase": "execution",
                                                     "story_id": story.id,
                                                     "max_fix_retries": max_retries})
@@ -230,18 +246,23 @@ class QAAgent(BaseAgent):
                 for e, problem in contract.violations(wanted, code)]
 
     def _revise_tests(self, db: Session, tools: Tools, story: m.UserStory, task: dict,
-                      result: runner.TestResult) -> bool:
-        """One LLM call: rewrite the story's tests from the failing output. True if they changed."""
+                      result: runner.TestResult, review: bool = False) -> bool:
+        """One LLM call: rewrite the story's tests from the failing output. True if they changed.
+
+        With `review` the tests run fine but the Developer could not make them pass: QA decides
+        whether the test is wrong against the API contract, and returns it unchanged if not."""
         ws = self.workspace(tools.project_id)
         targets = _tests_for(db, tools.project_id, story.id)
         before = {p: ws.read(p) for p in targets}
         errors = "\n".join(f"- {f.test}: {f.message}" for f in result.failures[:MAX_BUGS_PER_RUN])
         BaseAgent.run(self, db, tools.project_id, {
-            **task, "story_id": story.id, "name": "revise tests", "revise_tests": True,
+            **task, "story_id": story.id, "name": "review tests" if review else "revise tests",
+            "revise_tests": not review, "review_tests": review,
             "failures": f"{errors}\n\npytest output:\n{result.output[-1500:]}"})
         changed = {p: ws.read(p) for p in targets} != before
-        tools.log("tests_revised" if changed else "tests_revision_unchanged",
-                  f"Story #{story.id}: {story.title}", story_id=story.id)
+        kind = ("tests_corrected" if changed else "tests_review_unchanged") if review else (
+            "tests_revised" if changed else "tests_revision_unchanged")
+        tools.log(kind, f"Story #{story.id}: {story.title}", story_id=story.id)
         return changed
 
     def _record(self, tools: Tools, story: m.UserStory, result: runner.TestResult) -> None:
@@ -309,6 +330,18 @@ class QAAgent(BaseAgent):
                 lines += [f"=== {path} ===", ws.read(path)]
             lines += ["", "Return the corrected file in full. Keep one test per acceptance "
                           "criterion and the same expectations."]
+        if task.get("review_tests"):
+            lines += ["", "The Developer tried twice to make these tests pass and could not:",
+                      task.get("failures", ""), "", "Your current test file:"]
+            ws = self.workspace(project_id)
+            for path in _tests_for(db, project_id, story.id):
+                lines += [f"=== {path} ===", ws.read(path)]
+            lines += ["", "Decide whether the TEST is wrong. A test is wrong when it asserts "
+                          "something the API contract does not promise: the exact text of an "
+                          "error message, a status code or field the contract does not name, or "
+                          "a request that differs from the contract. If it is wrong, return the "
+                          "corrected file in full, asserting the contract's status codes and key "
+                          "fields only. If the test is right, return it exactly as it is."]
         return "\n".join(lines)
 
     def _planned_api(self, db: Session, project_id: int, story: m.UserStory) -> list[str]:

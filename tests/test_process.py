@@ -76,11 +76,29 @@ def test_suggest_process_changes_keeps_a_working_process():
 # --- applying changes ---------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("value, expected", [(1, 3), (99, 40), (12, 12)])
+@pytest.mark.parametrize("value, expected", [(99, 40), (12, 12), (8, 8)])
 def test_apply_clamps_capacity(value, expected):
     new, diff = CFG.apply(ProcessChanges(capacity=value))
     assert new.capacity == expected
     assert diff == ({"capacity": [10, expected]} if expected != 10 else {})
+
+
+@pytest.mark.parametrize("value", [1, 3, 5, 6])
+def test_one_retrospective_cuts_capacity_by_at_most_30_percent(value):
+    """A live retro halved the capacity after one weak sprint, which left most of the backlog
+    unstarted. A cut now stops at 70 percent of the current capacity."""
+    new, diff = CFG.apply(ProcessChanges(capacity=value))
+    assert new.capacity == 7 and diff == {"capacity": [10, 7]}
+
+
+def test_the_cut_never_goes_below_the_minimum_capacity():
+    small = CFG.model_copy(update={"capacity": 4})
+    assert small.apply(ProcessChanges(capacity=3))[0].capacity == 3  # 70% of 4 is 2.8, floor is 3
+    assert small.apply(ProcessChanges(capacity=1))[0].capacity == 3
+
+
+def test_raising_the_capacity_is_not_limited():
+    assert CFG.apply(ProcessChanges(capacity=40))[0].capacity == 40
 
 
 @pytest.mark.parametrize("value, expected", [(0, 1), (9, 5), (2, 2)])
@@ -225,15 +243,15 @@ def test_next_sprint_is_planned_with_the_retro_levers(db: Session, project: m.Pr
     sm.run(db, project.id, PLANNING)
 
     sprint = repo.current_sprint(db, project.id)
-    assert sprint.number == 2 and sprint.capacity == 3
+    assert sprint.number == 2 and sprint.capacity == 7  # the proposed 3 is cut gently
     assert [s.id for s in sprint.stories] == [open_story.id]
     assert len(sprint.stories[0].tasks) == 2  # the carried story kept its tasks
     planned = [e for e in repo.events_since(db, project.id) if e.kind == "sprint_planned"][-1]
-    expected = {"capacity": 3, "max_fix_retries": 3, "test_first": True,
+    expected = {"capacity": 7, "max_fix_retries": 3, "test_first": True,
                 "guidelines": [TEST_FIRST_RULE]}
     assert planned.payload["process"] == expected
     diff = planned.payload["process_changes"]
-    assert diff == {"capacity": [10, 3], "test_first": [False, True],
+    assert diff == {"capacity": [10, 7], "test_first": [False, True],
                     "guidelines": [[], [TEST_FIRST_RULE]]}
     assert planned.payload["process_reason"]
     changed = [e for e in repo.events_since(db, project.id) if e.kind == "process_changed"]

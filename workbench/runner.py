@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 TIMEOUT_SECONDS = 120
+DB_SUFFIXES = (".db", ".sqlite", ".sqlite3")
 MAX_MESSAGE_CHARS = 400
 
 
@@ -36,9 +37,24 @@ class TestResult:
         return not self.failures and self.passed > 0
 
 
+def clear_databases(workspace: Path) -> int:
+    """Delete the SQLite files the generated app left behind in earlier runs.
+
+    `CREATE TABLE IF NOT EXISTS` does not change a table that exists, so a later story that adds
+    a column failed with `no such column` against the file an earlier run created. A run starts
+    from a database that the current code creates. Returns how many files were removed."""
+    removed = 0
+    for path in workspace.rglob("*"):
+        if path.suffix in DB_SUFFIXES and path.is_file() and ".git" not in path.parts:
+            path.unlink(missing_ok=True)
+            removed += 1
+    return removed
+
+
 def run_pytest(workspace: Path, targets: Sequence[str] = ("tests",),
                timeout: int = TIMEOUT_SECONDS) -> TestResult:
     """Run pytest on `targets` inside `workspace`. Never raises on test failures."""
+    clear_databases(workspace)
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     env["PYTHONDONTWRITEBYTECODE"] = "1"  # no __pycache__ in the workspace (it is a git repo)
     with tempfile.TemporaryDirectory() as tmp:

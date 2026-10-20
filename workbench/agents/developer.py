@@ -68,6 +68,15 @@ def _open_bugs(db: Session, story_id: int) -> list[m.Bug]:
     return list(db.query(m.Bug).filter_by(story_id=story_id, status="open").order_by(m.Bug.id))
 
 
+REFUSAL_RETRIES = 2  # extra tries after the answer was refused (dropped routes, broken code)
+
+
+def _earlier_attempts(db: Session, project_id: int, bug_id: int) -> int:
+    """Fix attempts logged for a bug in all sprints, also after its counter was reset."""
+    return sum(1 for e in repo.events_since(db, project_id)
+               if e.kind in ("bug_fix_failed", "bug_fixed") and e.payload.get("bug_id") == bug_id)
+
+
 def _fixable_bugs(db: Session, story_id: int, max_retries: int) -> list[m.Bug]:
     return [b for b in _open_bugs(db, story_id) if b.retries < max_retries]
 
@@ -141,8 +150,10 @@ class DeveloperAgent(BaseAgent):
                 self.test_writer(db, project_id, {**task, "story_id": story.id})
             story_task = {**task, "story_id": story.id, "max_fix_retries": max_retries}
             out = super().run(db, project_id, story_task)
-            if story_task.get("refused"):  # refused: ask once more, with the reasons
-                story_task["retried"] = True
+            for attempt in range(REFUSAL_RETRIES):  # refused: ask again, with the reasons
+                if not story_task.get("refused"):
+                    break
+                story_task["retried"] = attempt == REFUSAL_RETRIES - 1  # the last one counts
                 out = super().run(db, project_id, story_task)
             files += out.files
         return CodeOutput(summary=f"Implemented {len(stories)} stories", files=files)
@@ -175,8 +186,12 @@ class DeveloperAgent(BaseAgent):
         bugs = _fixable_bugs(db, story.id, max_retries)
         if bugs:
             lines += ["", "Bugs to fix (from QA):"]
-            lines += [f"- [bug {b.id}] {b.description} (attempt {b.retries + 1} of "
-                      f"{max_retries})" for b in bugs]
+            for b in bugs:
+                earlier = _earlier_attempts(db, project_id, b.id)
+                again = (f"; {earlier} earlier attempts did not make the test pass, so do not "
+                         "return the same code: change your approach" if earlier else "")
+                lines.append(f"- [bug {b.id}] {b.description} "
+                             f"(attempt {b.retries + 1} of {max_retries}{again})")
 
         latest_tests = {a.path: a for a in _linked(db, project_id, story.id, "test")}
         if latest_tests:  # outside the file budget: these define "done"
@@ -276,6 +291,7 @@ class DeveloperAgent(BaseAgent):
                     tools.record_fix_attempt(b.id, fixed=False)
             return
 
+        task.pop("refused", None)  # this answer is accepted: no reason is left to show
         changed: dict[str, str] = {}
         for f in out.files:
             try:
