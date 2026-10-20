@@ -22,7 +22,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import contract
+from workbench import contract, staticcheck
 from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
@@ -141,7 +141,7 @@ class DeveloperAgent(BaseAgent):
                 self.test_writer(db, project_id, {**task, "story_id": story.id})
             story_task = {**task, "story_id": story.id, "max_fix_retries": max_retries}
             out = super().run(db, project_id, story_task)
-            if story_task.get("rejected_routes"):  # refused: ask once more, with the reason
+            if story_task.get("refused"):  # refused: ask once more, with the reasons
                 story_task["retried"] = True
                 out = super().run(db, project_id, story_task)
             files += out.files
@@ -184,11 +184,11 @@ class DeveloperAgent(BaseAgent):
             for path, a in latest_tests.items():
                 lines += [f"=== {path} ===", a.content]
 
-        if task.get("rejected_routes"):
-            removed = ", ".join(task["rejected_routes"])
-            lines += ["", "Your previous answer was refused: it would have removed these "
-                          f"endpoints, which other stories already use: {removed}. Return the "
-                          "changed files again and keep every existing endpoint."]
+        if task.get("refused"):
+            reasons = "\n".join(f"- {r}" for r in task["refused"])
+            lines += ["", "Your previous answer was refused for these reasons:", reasons,
+                      "Return the changed files again with these fixed, and keep every "
+                      "existing endpoint."]
 
         lines += ["", "Current files:"]
         ws, used, skipped = self.workspace(project_id), 0, []
@@ -227,6 +227,20 @@ class DeveloperAgent(BaseAgent):
             ]
         return {"summary": f"Implemented story #{story.id}: {story.title}", "files": files}
 
+    def _refusals(self, ws: Workspace, files: list) -> list[str]:
+        """Why the answer must not be applied: endpoints it removes, undefined names and syntax
+        errors in the `app/*.py` files it writes. Empty when it is fine."""
+        reasons = [f"it removes the endpoint {e}, which other stories use"
+                   for e in self._removed_routes(ws, files)]
+        for f in files:
+            try:
+                path = ws.resolve(repo_path(f.path)).relative_to(ws.path).as_posix()
+            except UnsafePath:
+                continue
+            if path.startswith("app/") and path.endswith(".py"):
+                reasons += staticcheck.problems(path, f.content)
+        return reasons
+
     def _removed_routes(self, ws: Workspace, files: list) -> list[contract.Endpoint]:
         """Endpoints the workspace has now that the answer's `app/*.py` files would take away."""
         new: dict[str, str] = {}
@@ -252,12 +266,11 @@ class DeveloperAgent(BaseAgent):
         bugs = _fixable_bugs(db, story.id, fix_retry_limit(db, tools.project_id, task))
         ws = self.workspace(tools.project_id).init()
 
-        removed = self._removed_routes(ws, out.files)
-        if removed:  # a rewrite that drops endpoints other stories use is not applied
-            task["rejected_routes"] = [str(e) for e in removed]
-            names = ", ".join(task["rejected_routes"])
-            tools.log("code_rejected", f"{story.title}: would remove {names}", story_id=story.id,
-                      endpoints=task["rejected_routes"])
+        refused = self._refusals(ws, out.files)
+        if refused:  # code that drops endpoints or cannot even run is not applied
+            task["refused"] = refused
+            tools.log("code_rejected", f"{story.title}: {refused[0]}", story_id=story.id,
+                      reasons=refused)
             if task.get("retried"):  # the second answer was refused as well: a failed attempt
                 for b in bugs:
                     tools.record_fix_attempt(b.id, fixed=False)

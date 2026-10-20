@@ -139,7 +139,8 @@ def test_unchanged_output_is_a_failed_fix_attempt(db: Session, project: m.Projec
 
 def test_unsafe_paths_are_rejected(db: Session, project: m.Project, monkeypatch, tmp_path):
     bad = ["../escape.py", ".git/config", "C:/win.py", "a/../../b.py"]
-    files = [{"path": p, "content": "x"} for p in bad] + [{"path": "app\\ok.py", "content": "ok"}]
+    files = [{"path": p, "content": "x"} for p in bad]
+    files.append({"path": "app\\ok.py", "content": "ok = 1\n"})
     DeveloperAgent(_fake_llm(monkeypatch, {"files": files})).run(db, project.id, EXECUTION)
     ws = Workspace(project.id)
     assert ws.files() == ["app/ok.py"]
@@ -148,7 +149,7 @@ def test_unsafe_paths_are_rejected(db: Session, project: m.Project, monkeypatch,
 
 
 def test_leading_slash_path_is_read_as_repo_relative(db: Session, project: m.Project, monkeypatch):
-    files = [{"path": "/app/main.py", "content": "ok"}]
+    files = [{"path": "/app/main.py", "content": "ok = 1\n"}]
     DeveloperAgent(_fake_llm(monkeypatch, {"files": files})).run(db, project.id, EXECUTION)
     assert Workspace(project.id).files() == ["app/main.py"]
     assert "file_rejected" not in _kinds(db, project.id)
@@ -209,6 +210,26 @@ def test_a_rewrite_that_removes_endpoints_is_refused_and_retried(
     assert "was refused" not in prompts[0]
     # the first story's routes stay
     assert "@app.post('/books'" in Workspace(project.id).read("app/main.py")
+
+
+def test_code_with_an_undefined_name_is_refused_and_retried(
+        db: Session, project: m.Project, monkeypatch):
+    """The model forgot `from pathlib import Path`; QA would only see it as a collection error."""
+    broken = _main("from fastapi import FastAPI\napp = FastAPI()\nroot = Path('.')\n")
+    fixed = _main("from pathlib import Path\nfrom fastapi import FastAPI\n"
+                  "app = FastAPI()\nroot = Path('.')\n")
+    llm = _fake_llm(monkeypatch, broken, fixed)
+    prompts: list[str] = []
+    real_call = llm._call
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: (
+        prompts.append(prompt), real_call(system, prompt, stats))[1])
+
+    DeveloperAgent(llm).run(db, project.id, EXECUTION)
+
+    kinds = _kinds(db, project.id)
+    assert kinds.count("code_rejected") == 1 and "code_committed" in kinds
+    assert "Undefined name `Path`" in prompts[1] and "was refused" in prompts[1]
+    assert "from pathlib import Path" in Workspace(project.id).read("app/main.py")
 
 
 def test_a_second_refusal_changes_nothing_and_fails_the_bug_attempt(

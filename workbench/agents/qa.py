@@ -48,6 +48,8 @@ Rules:
   and `from app.main import app`. Keep each test independent of the others.
 - Create the client with `with TestClient(app) as client:` so the app's startup code runs. Send
   request data as a JSON body: `client.post(url, json={...})`. Import every module your tests use.
+- Assert status codes and key fields, never the exact text of an error message: frameworks word
+  their own validation errors.
 - Do not change application code. Do not use the network or sleep.
 - summary is one sentence."""
 
