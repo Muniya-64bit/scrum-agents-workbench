@@ -37,6 +37,9 @@ LLM_PROVIDER = _choice("LLM_PROVIDER", os.getenv("LLM_PROVIDER", "anthropic"), L
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "1800"))
+# When set, every endpoint except /health needs `Authorization: Bearer <token>` (or ?token=...,
+# which a browser EventSource needs). Empty means no authentication: run it locally.
+API_TOKEN = os.getenv("WORKBENCH_API_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./workbench.db")
 WORKSPACES_DIR = os.getenv("WORKSPACES_DIR", "./workspaces")
 DEFAULT_MAX_FIX_RETRIES = int(os.getenv("DEFAULT_MAX_FIX_RETRIES", "3"))

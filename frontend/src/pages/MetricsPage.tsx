@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, download } from "../api/client";
 import { CostSection } from "../components/results/CostSection";
 import { GqmSection } from "../components/results/GqmSection";
 import { OutcomeSummary } from "../components/results/OutcomeSummary";
@@ -8,7 +8,9 @@ import { SprintComparison } from "../components/results/SprintComparison";
 import { SprintDetail } from "../components/results/SprintDetail";
 import { IconChart } from "../components/icons";
 import { PdcaPanel, ReleasesPanel } from "../components/ImprovementPanels";
-import { EmptyState, ErrorState, Loading } from "../components/ui";
+import { useToast } from "../components/Toast";
+import { Button, EmptyState, ErrorState, Loading } from "../components/ui";
+import { slugify } from "../lib/format";
 import { useResource } from "../lib/useResource";
 import { useProject } from "./ProjectLayout";
 
@@ -28,6 +30,12 @@ const SECTIONS = [
 export function MetricsPage() {
   const { project, version } = useProject();
   const res = useResource(() => api.metrics(project.id), [project.id, version]);
+  const toast = useToast();
+  const stem = slugify(project.name);
+
+  function save(path: string, filename: string) {
+    download(path, filename).catch((e) => toast("error", e instanceof Error ? e.message : String(e)));
+  }
 
   if (res.error && !res.data) return <ErrorState error={res.error} onRetry={res.reload} />;
   if (!res.data) return <Loading label="Loading results" />;
@@ -43,7 +51,17 @@ export function MetricsPage() {
 
   return (
     <div className="page-body">
-      <h2 className="section-title">Results</h2>
+      <div className="results-head">
+        <h2 className="section-title">Results</h2>
+        <div className="results-downloads">
+          <Button onClick={() => save(`/projects/${project.id}/report`, `${stem}-report.md`)}>
+            Download report
+          </Button>
+          <Button onClick={() => save(`/projects/${project.id}/export`, `${stem}.zip`)}>
+            Download project
+          </Button>
+        </div>
+      </div>
       <OutcomeSummary data={data} />
       <nav className="results-nav" aria-label="On this page">
         {SECTIONS.map((s) => (

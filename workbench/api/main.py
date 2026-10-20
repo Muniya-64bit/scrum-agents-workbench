@@ -1,11 +1,12 @@
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import metrics, process, process_model, requirements
+from workbench import config, export, metrics, process, process_model, requirements
 from workbench.agents.registry import AGENTS
 from workbench.agents.tools import Tools
 from workbench.api.sse import event_stream, event_view
@@ -49,6 +50,21 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Scrum Agents Workbench", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    """With WORKBENCH_API_TOKEN set, everything but /health needs the token, as a bearer token or
+    as `?token=` (a browser EventSource cannot send headers)."""
+    token = config.API_TOKEN
+    if token and request.url.path != "/health" and request.method != "OPTIONS":
+        header = request.headers.get("authorization", "")
+        given = header.removeprefix("Bearer ").strip() or request.query_params.get("token", "")
+        if not secrets.compare_digest(given.encode(), token.encode()):
+            return JSONResponse(status_code=401,
+                                content={"detail": "A valid API token is required"},
+                                headers={"WWW-Authenticate": "Bearer"})
+    return await call_next(request)
 
 DESIGN_KINDS = {"architecture", "diagram", "api_spec", "design"}
 
@@ -310,6 +326,24 @@ def improvement(project_id: int, db: Session = Depends(get_session)):
 def project_metrics(project_id: int, db: Session = Depends(get_session)):
     _proj(db, project_id)
     return ProjectMetricsView.model_validate(metrics.project_metrics(db, project_id))
+
+
+# --- Export -----------------------------------------------------------------------------------
+
+@app.get("/projects/{project_id}/report", response_class=PlainTextResponse)
+def project_report(project_id: int, db: Session = Depends(get_session)):
+    """A Markdown report of the project: requirements, backlog, every sprint, releases, bugs."""
+    _proj(db, project_id)
+    return PlainTextResponse(export.report(db, project_id), media_type="text/markdown")
+
+
+@app.get("/projects/{project_id}/export")
+def project_export(project_id: int, db: Session = Depends(get_session)):
+    """A zip of the report and the generated project (code, tests, release notes)."""
+    p = _proj(db, project_id)
+    return Response(export.archive(db, project_id), media_type="application/zip",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{export.filename(p)}.zip"'})
 
 
 # --- Activity feed ----------------------------------------------------------------------------

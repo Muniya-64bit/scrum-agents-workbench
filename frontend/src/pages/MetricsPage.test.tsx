@@ -235,6 +235,28 @@ describe("MetricsPage", () => {
     expect(await screen.findByText(/No release checks yet/)).toBeInTheDocument();
   });
 
+  it("downloads the report and the project under the project's name", async () => {
+    const user = userEvent.setup();
+    const create = vi.fn(() => "blob:x");
+    vi.stubGlobal("URL", { createObjectURL: create, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const calls = mockApi({
+      ...routes(),
+      "GET /projects/1/report": "# Todo app: project report",
+      "GET /projects/1/export": "zip",
+    });
+    renderApp("/projects/1/metrics");
+
+    await user.click(await screen.findByRole("button", { name: "Download report" }));
+    await user.click(screen.getByRole("button", { name: "Download project" }));
+
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(2));
+    expect(calls.map((c) => c.path)).toEqual(
+      expect.arrayContaining(["/projects/1/report", "/projects/1/export"]),
+    );
+    click.mockRestore();
+  });
+
   it("offers jump links to every section", async () => {
     mockApi(routes());
     renderApp("/projects/1/metrics");
