@@ -1,5 +1,7 @@
 """Static check of model-written files: undefined names and syntax errors."""
 
+import pytest
+
 from workbench import staticcheck
 
 
@@ -72,3 +74,36 @@ def test_ruff_failing_to_run_does_not_hide_a_compile_error(monkeypatch):
     monkeypatch.setattr(staticcheck.subprocess, "run", lambda *a, **k: Broken())
     assert staticcheck.problems("app/main.py", "def f(:\n") != []  # the compiler still decides
     assert staticcheck.problems("app/main.py", "x = missing\n") == []  # ruff's part is skipped
+
+
+# --- modules that are not installed ------------------------------------------------------------
+
+
+def test_an_import_of_a_module_that_is_not_installed_is_reported_with_its_line():
+    source = "from fastapi import FastAPI\nimport validators\napp = FastAPI()\n"
+    (problem,) = staticcheck.problems("app/main.py", source)
+    assert problem.startswith("app/main.py line 2: the module 'validators' is not installed here")
+    assert "-- the line is: import validators" in problem
+    assert "fastapi, pydantic, httpx, uvicorn, sqlalchemy and the standard library" in problem
+
+
+@pytest.mark.parametrize("source", [
+    "import os\nimport json\nfrom pathlib import Path\nfrom urllib.parse import urlparse\n",
+    "from fastapi import FastAPI\nfrom pydantic import BaseModel\nimport httpx\n",
+    "from app.db import init_db\nimport app.models\n",  # the project's own packages
+    "from . import models\nfrom .db import init_db\n",  # relative imports are the project's own
+])
+def test_installed_stdlib_and_local_imports_are_fine(source):
+    assert staticcheck.missing_modules("app/main.py", source) == []
+
+
+def test_each_missing_module_is_listed_once_and_submodules_count_as_their_package():
+    source = "import validators\nfrom validators.url import url\nimport pymongo.errors\n"
+    found = staticcheck.missing_modules("app/main.py", source)
+    assert [f.split("'")[1] for f in found] == ["validators", "pymongo"]
+
+
+def test_a_broken_file_is_left_to_the_syntax_check():
+    assert staticcheck.missing_modules("app/main.py", "import validators\ndef f(:\n") == []
+    (problem,) = staticcheck.problems("app/main.py", "import validators\ndef f(:\n")
+    assert "line 2" in problem and "validators" not in problem

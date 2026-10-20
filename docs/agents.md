@@ -244,6 +244,15 @@ a NUL is caught even when ruff cannot run; and QA checks the `app/*.py` files it
 (`_broken_app_files`): one that does not compile becomes a bug `app code: <file> line N: <message>`
 for the Developer, and the test is not revised.
 
+### Modules that are not installed
+The Developer's `app/*.py` files are refused when they import a module that is not installed where
+the tests run (`staticcheck.missing_modules`: `import validators`, `import pymongo`), unless it is the
+standard library or the project's own `app`/`tests` package. The reason names the module and the line
+and lists what is installed (fastapi, pydantic, httpx, uvicorn, sqlalchemy, the standard library),
+and the Developer gets up to two more tries. Without this a live run lost three sprints to
+`ModuleNotFoundError: No module named 'validators'`: the prompt said only what was installed, and the
+model kept returning the same import.
+
 ### API contract
 The Architect's per-story design carries `endpoints`, each with method, path, purpose,
 `request_fields`, `success_status` and `error_statuses` (at least one per story). `workbench/contract.py`
