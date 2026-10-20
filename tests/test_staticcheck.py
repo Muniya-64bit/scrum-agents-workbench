@@ -1,4 +1,4 @@
-"""Static check of model-written files: undefined names and syntax errors, before they are written."""
+"""Static check of model-written files: undefined names and syntax errors."""
 
 from workbench import staticcheck
 
