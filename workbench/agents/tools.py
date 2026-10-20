@@ -13,6 +13,11 @@ class Tools:
     def log(self, kind: str, message: str = "", **payload):
         return repo.log_event(self.db, self.project_id, self.agent, kind, message, **payload)
 
+    def message(self, to: str, subject: str, body: str = "", **payload):
+        """A structured note from this agent to another one, on the event bus. It is shown in the
+        activity feed (`agent_message`), so the way the agents work together can be followed."""
+        return self.log("agent_message", subject, to=to, body=body, **payload)
+
     def set_vision(self, vision: str) -> m.Project:
         p = repo.update(self.db, repo.get(self.db, m.Project, self.project_id), vision=vision)
         self.log("vision_set", vision)
@@ -125,6 +130,8 @@ class Tools:
     def report_bug(self, story_id: int, description: str) -> m.Bug:
         b = repo.add(self.db, m.Bug(story_id=story_id, description=description))
         self.log("bug_reported", description, bug_id=b.id, story_id=story_id)
+        self.message("developer", f"Please fix bug #{b.id}", description[:200], bug_id=b.id,
+                     story_id=story_id)
         return b
 
     def record_fix_attempt(self, bug_id: int, fixed: bool) -> m.Bug:
@@ -133,6 +140,9 @@ class Tools:
         b = repo.update(self.db, b, retries=b.retries + 1, status="fixed" if fixed else b.status)
         self.log("bug_fixed" if fixed else "bug_fix_failed", b.description, bug_id=b.id,
                  story_id=b.story_id, retries=b.retries)
+        outcome = "a fix is committed, please test again" if fixed else "I could not fix it"
+        self.message("qa", f"Bug #{b.id}: {outcome}", b.description[:200], bug_id=b.id,
+                     story_id=b.story_id, attempt=b.retries)
         return b
 
     def reopen_bug(self, bug_id: int) -> m.Bug:

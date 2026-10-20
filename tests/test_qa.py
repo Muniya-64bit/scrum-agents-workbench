@@ -383,6 +383,9 @@ def test_a_wrong_test_is_corrected_after_two_failed_developer_attempts(
     assert next(t for t in coded.tasks if t.assignee == "qa").status == "done"
     assert "tried twice" in qa_llm.last_prompt
     assert "exact text of an error message" in qa_llm.last_prompt
+    told = [e for e in events if e.kind == "agent_message" and "corrected" in e.message]
+    assert [e.message for e in told] == [f"I corrected the test of story #{coded.id}"]
+    assert told[0].agent == "qa" and told[0].payload["to"] == "developer"
 
 
 def test_qa_does_not_doubt_a_test_before_the_developer_failed_twice(

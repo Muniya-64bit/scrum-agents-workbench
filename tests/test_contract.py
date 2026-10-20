@@ -24,6 +24,7 @@ def test_render_then_parse_gives_the_same_endpoints():
                                     Endpoint("GET", "/books/{book_id}", 200),
                                     Endpoint("DELETE", "/books/{book_id}", 204)]
     assert "copies: {type: integer}" in text and "'422':" in text
+    assert 'example: {"title": "text", "copies": 1}' in text
 
 
 def test_two_methods_on_one_path_share_a_path_entry():
@@ -112,3 +113,18 @@ def test_lost_tolerates_a_router_prefix_in_either_direction():
 def test_a_root_route_stands_for_a_router_collection_route():
     after = [Endpoint("POST", "/", 201)]  # `@router.post("/")` under prefix="/books"
     assert contract.lost([Endpoint("POST", "/books", 201)], after) == []
+
+
+def test_example_body_has_one_value_per_field_by_type():
+    assert contract.example_body(["title: str", "copies: int", "price: float", "paid: bool",
+                                  "tags: list"]) == {
+        "title": "text", "copies": 1, "price": 1.5, "paid": True, "tags": "text"}
+    assert contract.example_body([]) == {}
+
+
+def test_an_endpoint_without_a_body_has_no_example():
+    assert "example:" not in contract.render([GET])
+
+
+def test_the_example_does_not_disturb_parsing():
+    assert contract.parse(contract.render([CREATE]))[0] == Endpoint("POST", "/books", 201)

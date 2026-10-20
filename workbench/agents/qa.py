@@ -263,6 +263,10 @@ class QAAgent(BaseAgent):
         kind = ("tests_corrected" if changed else "tests_review_unchanged") if review else (
             "tests_revised" if changed else "tests_revision_unchanged")
         tools.log(kind, f"Story #{story.id}: {story.title}", story_id=story.id)
+        if review and changed:
+            tools.message("developer", f"I corrected the test of story #{story.id}",
+                          "It asserted something the API contract does not promise; "
+                          "you get a fresh set of attempts.", story_id=story.id)
         return changed
 
     def _record(self, tools: Tools, story: m.UserStory, result: runner.TestResult) -> None:
@@ -305,7 +309,8 @@ class QAAgent(BaseAgent):
         spec = contract.for_story(db, project_id, story.id)[0]
         if spec:
             lines += ["", "API contract from the Architect (call exactly these methods and paths, "
-                          "send these JSON fields, expect these status codes):", spec]
+                          "send the `example` request bodies with exactly their fields, expect "
+                          "these status codes):", spec]
         lines += ["", f"Write the tests in tests/test_story_{story.id}.py.", ""]
         if task.get("test_first"):
             lines += self._planned_api(db, project_id, story)

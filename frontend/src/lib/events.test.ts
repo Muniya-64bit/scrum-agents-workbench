@@ -23,6 +23,7 @@ describe("describeEvent", () => {
     [ev("file_rejected", "/tests/x.py"), "Rejected a file with an unsafe or disallowed path: /tests/x.py", "danger"],
     [ev("tests_missing", "No valid tests for story #12"), "No valid tests for story #12: QA wrote no usable test file", "danger"],
     [ev("docker_build_failed", "permission denied\nsecond line"), "The Docker image could not be built: permission denied", "danger"],
+    [ev("agent_message", "Please fix bug #4", { to: "developer" }), "Told the Developer: Please fix bug #4", "accent"],
     [ev("tests_revised", "Story #3: Add"), "QA rewrote its tests after a mistake in the test code: Story #3: Add", "accent"],
     [ev("code_committed", "Story #3: Add"), "Code committed: Story #3: Add", "neutral"],
     [ev("nfrs_set", "2 non-functional requirement(s)"), "Wrote 2 non-functional requirement(s)", "neutral"],

@@ -110,6 +110,8 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
       return { text: `Rejected a file with an unsafe or disallowed path: ${m}`, tone: "danger" };
     case "tests_missing":
       return { text: `${m}: QA wrote no usable test file`, tone: "danger" };
+    case "agent_message":
+      return { text: `Told the ${roleLabel(String(e.payload.to ?? ""))}: ${m}`, tone: "accent" };
     case "tests_revised":
       return { text: `QA rewrote its tests after a mistake in the test code: ${m}`, tone: "accent" };
     case "tests_revision_unchanged":
