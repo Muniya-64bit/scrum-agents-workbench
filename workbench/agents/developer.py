@@ -68,6 +68,9 @@ def _open_bugs(db: Session, story_id: int) -> list[m.Bug]:
     return list(db.query(m.Bug).filter_by(story_id=story_id, status="open").order_by(m.Bug.id))
 
 
+REFUSAL_RETRIES = 2  # extra tries after the answer was refused (dropped routes, broken code)
+
+
 def _earlier_attempts(db: Session, project_id: int, bug_id: int) -> int:
     """Fix attempts logged for a bug in all sprints, also after its counter was reset."""
     return sum(1 for e in repo.events_since(db, project_id)
@@ -147,8 +150,10 @@ class DeveloperAgent(BaseAgent):
                 self.test_writer(db, project_id, {**task, "story_id": story.id})
             story_task = {**task, "story_id": story.id, "max_fix_retries": max_retries}
             out = super().run(db, project_id, story_task)
-            if story_task.get("refused"):  # refused: ask once more, with the reasons
-                story_task["retried"] = True
+            for attempt in range(REFUSAL_RETRIES):  # refused: ask again, with the reasons
+                if not story_task.get("refused"):
+                    break
+                story_task["retried"] = attempt == REFUSAL_RETRIES - 1  # the last one counts
                 out = super().run(db, project_id, story_task)
             files += out.files
         return CodeOutput(summary=f"Implemented {len(stories)} stories", files=files)
@@ -286,6 +291,7 @@ class DeveloperAgent(BaseAgent):
                     tools.record_fix_attempt(b.id, fixed=False)
             return
 
+        task.pop("refused", None)  # this answer is accepted: no reason is left to show
         changed: dict[str, str] = {}
         for f in out.files:
             try:

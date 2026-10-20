@@ -232,18 +232,47 @@ def test_code_with_an_undefined_name_is_refused_and_retried(
     assert "from pathlib import Path" in Workspace(project.id).read("app/main.py")
 
 
-def test_a_second_refusal_changes_nothing_and_fails_the_bug_attempt(
+def test_three_refusals_change_nothing_and_fail_the_bug_attempt_once(
         db: Session, project: m.Project, monkeypatch):
     Workspace(project.id).init().write("app/main.py", ROUTES_V1)
     story = _story(db, project)
     bug = Tools(db, project.id, "qa").report_bug(story.id, "tests.x: broken")
     dropped = _main("from fastapi import FastAPI\napp = FastAPI()\n")
-    DeveloperAgent(_fake_llm(monkeypatch, dropped, dropped)).run(db, project.id, EXECUTION)
+    DeveloperAgent(_fake_llm(monkeypatch, dropped, dropped, dropped)).run(
+        db, project.id, EXECUTION)
 
-    assert _kinds(db, project.id).count("code_rejected") == 2
+    assert _kinds(db, project.id).count("code_rejected") == 3  # the answer and two retries
     assert Workspace(project.id).read("app/main.py") == ROUTES_V1
     db.refresh(bug)
-    assert bug.retries == 1 and bug.status == "open"  # one failed attempt, not two
+    assert bug.retries == 1 and bug.status == "open"  # one failed attempt, not three
+
+
+def test_an_answer_accepted_on_the_last_retry_is_applied(db: Session, project: m.Project,
+                                                         monkeypatch):
+    Workspace(project.id).init().write("app/main.py", ROUTES_V1)
+    story = _story(db, project)
+    bug = Tools(db, project.id, "qa").report_bug(story.id, "tests.x: broken")
+    dropped = _main("from fastapi import FastAPI\napp = FastAPI()\n")
+    kept = _main(ROUTES_V1 + "@app.get('/loans')\ndef loans(): ...\n")
+    DeveloperAgent(_fake_llm(monkeypatch, dropped, dropped, kept)).run(db, project.id, EXECUTION)
+
+    kinds = _kinds(db, project.id)
+    assert kinds.count("code_rejected") == 2 and "code_committed" in kinds
+    assert "@app.get('/loans')" in Workspace(project.id).read("app/main.py")
+    db.refresh(bug)
+    assert bug.retries == 1 and bug.status == "fixed"  # counted once, as the accepted attempt
+
+
+def test_the_retry_prompt_shows_the_offending_line(db: Session, project: m.Project, monkeypatch):
+    broken = _main("from fastapi import FastAPI\ninit_db() app = FastAPI()\n")
+    fixed = _main("from fastapi import FastAPI\napp = FastAPI()\n")
+    llm = _fake_llm(monkeypatch, broken, fixed)
+    prompts: list[str] = []
+    real_call = llm._call
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: (
+        prompts.append(prompt), real_call(system, prompt, stats))[1])
+    DeveloperAgent(llm).run(db, project.id, EXECUTION)
+    assert "-- the line is: init_db() app = FastAPI()" in prompts[1]
 
 
 def test_moving_routes_behind_a_router_prefix_is_not_a_removal(

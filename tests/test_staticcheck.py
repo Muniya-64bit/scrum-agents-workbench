@@ -10,12 +10,20 @@ def test_a_clean_file_has_no_problems():
 def test_an_undefined_name_is_reported_with_its_line():
     source = "def f():\n    return Path('x')\n"
     assert staticcheck.problems("app/main.py", source) == [
-        "app/main.py line 2: Undefined name `Path`"]
+        "app/main.py line 2: Undefined name `Path` -- the line is: return Path('x')"]
 
 
 def test_a_syntax_error_is_reported():
     (problem,) = staticcheck.problems("app/main.py", "def f(a=1, b):\n    pass\n")
     assert problem.startswith("app/main.py line 1:") and "without a default" in problem
+    assert problem.endswith("-- the line is: def f(a=1, b):")
+
+
+def test_the_offending_line_is_shown_so_the_model_can_see_what_to_fix():
+    """A live model was refused 23 times for 'simple statements must be separated by newlines'
+    without being shown the line."""
+    (problem,) = staticcheck.problems("app/main.py", "init_db() app = FastAPI()\n")
+    assert "-- the line is: init_db() app = FastAPI()" in problem
 
 
 def test_unused_imports_are_not_a_problem():
