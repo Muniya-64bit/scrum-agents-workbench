@@ -29,9 +29,9 @@ CI runs typecheck, tests and build on every pull request.
 | `/` | Project list and the new-project form |
 | `/projects/:id/backlog` | Vision, stats, epics and stories with Given/When/Then criteria |
 | `/projects/:id/board` | Kanban board for the latest sprint (or every task before planning) |
-| `/projects/:id/activity` | Live activity feed with agent filters, and the approval card at a gate |
+| `/projects/:id/activity` | Live activity feed with agent filters. Messages between agents show as "Told the Developer: ..." |
 | `/projects/:id/metrics` | **Results**: what the project delivered, sprint by sprint, how well, at what cost. See "Results page" below |
-| `/projects/:id/traceability` | Story → design → code → tests → release matrix with results, gaps and an artifact viewer. Filters (`?sprint=`, `?status=`, `?gaps=1`) are kept in the URL |
+| `/projects/:id/traceability` | Story → design → code → tests → release matrix with results, gaps and an artifact viewer. Filters (`?sprint=`, `?status=`, `?gaps=1`) are kept in the URL; the sprint filter lists every sprint a story was planned into |
 | `/inbox` | Approval inbox: every project waiting at a gate, across projects |
 
 The phase bar shows "Sprint N" next to the current phase, and Board and Backlog show the sprint's
@@ -40,7 +40,19 @@ retro and release. After a release with more sprints to come the button reads **
 planning**.
 
 Every project page shows the phase bar and the phase controls: **Start &lt;next phase&gt;**, or
-**Approve / Reject** when the project waits at a gate.
+**Review and decide** when the project waits at a gate. At a gate the approval card appears at the top
+of every page, listing each story with its acceptance criteria and tasks; Approve and Reject (with a
+reason) are in the card only.
+
+**After the release.** A finished project shows "Found a problem after the release?" under the
+header. The form (problem, what happens, size in points) calls `POST /projects/{id}/maintenance`,
+which adds a top-priority fix story, and the project offers **Start Sprint planning** for a
+maintenance sprint.
+
+**Signing in.** If the backend was started with `WORKBENCH_API_TOKEN`, the first refused request
+(401) opens a "Sign in" dialog (`AuthGate`). The token is kept in this browser's local storage and is
+sent with requests, downloads and the event stream (`?token=`, because an `EventSource` cannot send
+headers).
 
 On the board, drag a card to another column or use the status menu on the card (keyboard
 friendly). The card moves at once; if saving fails it moves back and an error toast explains why.
@@ -57,11 +69,15 @@ shows under its title, and every number has a plain-language definition (from th
 | Sprint detail | One sprint in focus (a switcher, the latest closed sprint first): its goal, five key measures with their meaning and the change since the sprint before, and its burndown |
 | Quality | Test runs, pass rate, first-pass yield and bugs per sprint; the debugging columns sit behind "Show all columns", and a help block defines each column |
 | Cost of the AI team | Model calls, tokens and estimated cost; a local model is shown as free; the per-sprint breakdown is behind a toggle |
+| Release checks | What was checked on the latest release: the app starts, serves its contract, each non-functional requirement (met, not met, unverified) and the security scan |
 | Releases, Improvement | One release per sprint, and the Plan-Do-Check-Act card of each sprint |
 | How the metrics were chosen | The GQM goals, questions and metrics |
 
-Jump links at the top lead to each section. Charts are capped at 560 px wide so they stay readable
-on wide screens.
+Each sprint row of "Sprint by sprint" has two lines under it: what the team did (test runs and pass
+rate, bugs found, fix attempts) and, when it did not finish what it planned, why. Jump links at the
+top lead to each section. Charts are capped at 560 px wide so they stay readable on wide screens.
+**Download report** saves the project's Markdown report and **Download project** a zip of the report
+and the generated code (`GET /projects/{id}/report` and `/export`).
 
 **Code.** The rules (verdict, default sprint, planned-against-completed bar widths, metric
 definitions, whether a model is free) are pure functions in `src/lib/results.ts` with unit tests.

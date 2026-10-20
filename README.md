@@ -43,6 +43,15 @@ ceremonies.
   QA, and QA checks the code against them
 - **Guards on model-written work**: code that drops endpoints or cannot run is refused and retried,
   QA corrects a test that is itself wrong, and every test run starts from a fresh database
+- **Backlog refinement** before each sprint: the Product Owner fixes the stories the quality check
+  flags (and does nothing, at no cost, when there are none)
+- **Agents that tell each other things**: the Architect announces a contract, QA asks the Developer
+  to fix a bug, and the activity feed shows it
+- **Release checks** on the generated app: it is started, compared with its contract, timed against
+  the non-functional requirements and scanned for security mistakes
+- **Maintenance after the release**: report a problem and it becomes a fix story and a sprint
+- **Export** of a Markdown project report and a zip of the generated project
+- **An optional API token** (`WORKBENCH_API_TOKEN`) when the API is not on a private machine
 - **Planner rules** that keep a sprint moving: stuck stories are parked, spare capacity is filled,
   a capacity cut is limited, and only the agents that close tasks are given tasks
 - Traceability matrix story → design → code → tests with an artifact viewer, and every sprint a
@@ -220,6 +229,7 @@ Set in `.env` (copy from `.env.example`).
 | `LLM_MODE` | from `MOCK_LLM` | `mock`, `live`, `record` or `replay` ([docs/development.md](docs/development.md#llm-modes)) |
 | `LLM_SCENARIO_DIR`, `LLM_REPLAY_FALLBACK` | empty, `error` | Scenario folder for record/replay; `mock` uses the mock answer when a recording is missing |
 | `DEFAULT_CAPACITY`, `DEFAULT_MAX_FIX_RETRIES`, `MAX_SPRINTS` | `10`, `3`, `3` | First sprint's points, Developer attempts per bug, sprints before the project ends |
+| `WORKBENCH_API_TOKEN` | empty | When set, every endpoint except `/health` needs `Authorization: Bearer <token>`; the UI asks for it once. Empty means no login |
 | `WORKBENCH_MODEL_<ROLE>` | `WORKBENCH_MODEL` | Model of one role, e.g. `WORKBENCH_MODEL_DEVELOPER`, `WORKBENCH_MODEL_QA` (roles: `PRODUCT_OWNER`, `SCRUM_MASTER`, `ARCHITECT`, `DEVELOPER`, `QA`, `DEVOPS`) |
 | `LLM_PROVIDER` | `anthropic` | Live backend: `anthropic` or `ollama` (local) |
 | `OLLAMA_URL`, `OLLAMA_NUM_CTX`, `OLLAMA_TIMEOUT` | `http://localhost:11434`, `16384`, `1800` | Ollama server, context window in tokens, seconds per answer |
@@ -244,6 +254,9 @@ Set in `.env` (copy from `.env.example`).
 | GET | `/projects/{id}/bugs` | Bugs from QA |
 | GET | `/projects/{id}/traceability` | Story -> design -> code -> test -> release |
 | GET | `/projects/{id}/releases` | Versioned release per sprint |
+| GET | `/projects/{id}/release-checks` | Checks made on each release: starts, contract, requirements, security |
+| POST | `/projects/{id}/maintenance` | Report a problem after the release (becomes a fix story) |
+| GET | `/projects/{id}/report`, `/projects/{id}/export` | Markdown project report, zip of report and code |
 | GET | `/projects/{id}/process` | Process levers now and for the next sprint |
 | GET | `/process/model` | Process model: roles, product flow, entry/exit criteria, RACI |
 | GET | `/projects/{id}/metrics`, `/sprints/{id}/burndown` | GQM metrics, burndown series |
@@ -262,7 +275,9 @@ workbench/
   process_model.py  The process as data: roles, flow, entry and exit criteria, RACI
   process.py      Sprint levers (capacity, fix retries, test-first) and the retro advisor
   contract.py     The Architect's API contract: render, parse, check the code against it
-  staticcheck.py  Undefined names and syntax errors in model-written code
+  staticcheck.py  Undefined names, syntax errors and security findings in model-written code
+  release_checks.py  Starts the generated app and checks it at release
+  export.py       Markdown project report and zip of the generated project
   workspace.py    One sandbox directory and git repository per project
   runner.py       Runs the generated project's tests on a fresh database
   requirements.py Non-functional requirements and the backlog quality check
@@ -297,7 +312,7 @@ make cov     # pytest with the coverage gate (total line coverage must stay at 9
 make lint    # ruff
 ```
 CI runs lint, the tests with the coverage gate (`--cov-fail-under=95`) and the frontend checks on
-every pull request. There are about 360 backend tests and 160 front-end tests, and coverage is
+every pull request. There are about 430 backend tests and 185 front-end tests, and coverage is
 about 99% of `workbench/` today.
 
 ## Live results
@@ -310,14 +325,18 @@ to release); the table is how much of the backlog passed its tests.
 |---|---|---|
 | Before the guards and the planner fixes | 0 of 6 | 0 |
 | Tasks assigned only to the agents that close them | 1 of 6 | 5 |
-| Latest runs (QA corrects wrong tests, stuck stories parked, fresh database) | 1 to 2 of 6 | 3 to 5 |
+| QA corrects wrong tests, stuck stories parked, fresh database | 1 to 2 of 6 | 3 to 5 |
+| Plus one example request body for the Developer and QA, agent messages, release checks | 2 of 6 | 5 |
 
-Points did not climb steadily: run-to-run variation is large, and three or four runs cannot
-separate a real change from noise. What changed is how the team behaves: later sprints keep testing
-and fixing instead of idling, five of six stories are now attempted (two before), and a story with a
-wrong test can finish. The bugs that remain are mostly the Developer and QA disagreeing on what a
-request looks like. The scripted demo above is hand-written and shows the process, not a model's
-output. How the checks work is in [docs/architecture.md](docs/architecture.md).
+Points did not climb steadily: run-to-run variation is large, and a handful of runs cannot separate a
+real change from noise. What changed is how the team behaves: later sprints keep testing and fixing
+instead of idling, five of six stories are now attempted (two before), and a story with a wrong test
+can finish. The bugs that remain are mostly the Developer and QA disagreeing on what a request or a
+response looks like. In the latest run the release checks started the app and confirmed it served its
+contract at every release, and the security scan found nothing. Backlog refinement has not been
+exercised on a live model, because the live backlogs passed the quality check. The scripted demo
+above is hand-written and shows the process, not a model's output. How the checks work is in
+[docs/architecture.md](docs/architecture.md).
 
 ## Roadmap
 Three one-day sprints. See the issue labels `day-1`, `day-2` and `day-3`.

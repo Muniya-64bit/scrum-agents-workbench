@@ -71,8 +71,18 @@ other, so the UI plots the step number instead when the sprint lasted less than 
 applied to get it and why), `do` (committed and completed points), `check` (commitment
 reliability, first-pass yield, test pass rate, bugs reported, fix attempts, estimated cost) and
 `deltas` (check minus the previous sprint, `null` for sprint 1 or missing values), and `act` (the
-retro's lists and the process changes it proposed). The Metrics page draws each row as a card.
+retro's lists and the process changes it proposed). The Results page draws each row as a card.
 Better means higher for the three ratios and lower for bugs, fix attempts and cost.
+
+## Release checks and non-functional requirements
+Metrics measure the process. When a sprint is released with a real model, the generated app is
+also checked as a whole (`workbench/release_checks.py`, see [agents.md](agents.md#release-checks)):
+it must start and serve the API contract of the completed stories, and its code is scanned for
+common security mistakes. A non-functional requirement whose requirement or measure names a time limit (milliseconds or
+seconds) is verified: the list endpoints are timed and the 95th percentile must not exceed it
+(`met` or `not met`). Every other requirement is reported as `unverified`, because no automatic check
+exists for it. The results are `release_check` events, shown on the Results page and in the release
+notes. They are findings, not metrics: nothing aggregates them across sprints.
 
 ## Limitations
 - In mock mode no tokens are spent, so usage and cost are zero. Mock runs report `llm_mode: mock`.
@@ -82,5 +92,7 @@ Better means higher for the three ratios and lower for bugs, fix attempts and co
   `cache_hits`.
 - Replayed runs report the usage that was recorded, not new spending.
 - The burndown x-axis is time since the sprint started, not working days.
+- A mock run makes no release checks, and a requirement is verified only when it states a time limit and
+  the app has a list endpoint to time.
 - The data comes from event payloads. Projects created before the usage payload existed have no
   token data; their metrics show zeros.

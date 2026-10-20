@@ -23,7 +23,7 @@ from workbench.contract import Endpoint
 START_SECONDS = 20  # how long the app may take to start answering
 REQUEST_SECONDS = 5
 LATENCY_SAMPLES = 10  # requests per list endpoint, to take a p95
-_MS = re.compile(r"(\d+(?:\.\d+)?)\s*ms", re.IGNORECASE)
+_LIMIT = re.compile(r"(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?)\b", re.IGNORECASE)
 _LATENCY_WORDS = re.compile(r"respon|latenc|answer|request|time", re.IGNORECASE)
 
 
@@ -113,19 +113,30 @@ def _contract_check(paths: dict, endpoints: list[Endpoint]) -> Check:
     return Check("serves its contract", "passed", f"all {len(endpoints)} endpoints are served")
 
 
+def _limit_ms(text: str) -> float | None:
+    """The first time limit in a text, in milliseconds: '300 ms', '500 milliseconds', '2 s'."""
+    found = _LIMIT.search(text)
+    if not found:
+        return None
+    return float(found.group(1)) * (1 if found.group(2).lower().startswith("m") else 1000)
+
+
 def check_nfrs(nfrs: list[dict], p95_ms: float | None) -> list[Check]:
-    """Verify the non-functional requirements that name a time in milliseconds against the
-    measured p95; every other requirement is reported as not verified (no automatic check)."""
+    """Verify the non-functional requirements that name a time against the measured p95; every
+    other requirement is reported as not verified (no automatic check)."""
     results = []
     for n in nfrs:
         text = f"{n.get('requirement', '')} {n.get('measure', '')}"
-        limit = _MS.search(text)
+        limit = _limit_ms(text)
         name = (n.get("requirement") or "requirement")[:90]
-        if limit and _LATENCY_WORDS.search(text) and p95_ms is not None:
-            status = "met" if p95_ms <= float(limit.group(1)) else "not met"
-            results.append(Check(name, status, f"p95 {p95_ms:.0f} ms against {limit.group(1)} ms"))
-        else:
+        if limit is None or not _LATENCY_WORDS.search(text):
             results.append(Check(name, "unverified", "no automatic check for this requirement"))
+        elif p95_ms is None:
+            results.append(Check(name, "unverified", "the app has no list endpoint (a GET without "
+                                 "a path parameter) to time"))
+        else:
+            status = "met" if p95_ms <= limit else "not met"
+            results.append(Check(name, status, f"p95 {p95_ms:.0f} ms against {limit:g} ms"))
     return results
 
 

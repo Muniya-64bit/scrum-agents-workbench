@@ -94,14 +94,31 @@ def test_a_latency_requirement_is_checked_against_the_measured_p95():
     assert (not_met.status, not_met.detail) == ("not met", "p95 450 ms against 300 ms")
 
 
+@pytest.mark.parametrize("measure, limit", [
+    ("answered in under 500 milliseconds", "500"),
+    ("answered in under 500 ms.", "500"),
+    ("every request finishes within 2 seconds", "2000"),
+    ("98% of calls take less than 1.5 s", "1500"),
+])
+def test_a_time_limit_is_read_in_milliseconds_or_seconds(measure, limit):
+    (result,) = release_checks.check_nfrs(
+        [{"requirement": "The API shall respond fast", "measure": measure}], 100.0)
+    assert result.status == "met" and result.detail == f"p95 100 ms against {limit} ms"
+
+
+def test_a_missing_measurement_says_why_it_cannot_be_checked():
+    (result,) = release_checks.check_nfrs([LATENCY], None)
+    assert result.status == "unverified"
+    assert "no list endpoint" in result.detail
+
+
 def test_other_requirements_are_reported_as_not_verified():
     (result,) = release_checks.check_nfrs([STYLE], 120.0)
     assert result == Check("All code shall follow the standards", "unverified",
                            "no automatic check for this requirement")
 
 
-def test_a_latency_requirement_is_not_verified_without_a_measurement():
-    assert release_checks.check_nfrs([LATENCY], None)[0].status == "unverified"
+def test_no_requirements_means_no_results():
     assert release_checks.check_nfrs([], 10.0) == []
 
 

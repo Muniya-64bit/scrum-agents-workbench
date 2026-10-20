@@ -35,6 +35,8 @@ flowchart LR
 | Static check | `workbench/staticcheck.py` | Undefined names and syntax errors in model-written code, by `ruff`, before it is written |
 | Workspace | `workbench/workspace.py` | One directory and git repository per project; path safety |
 | Test runner | `workbench/runner.py` | Runs the generated project's tests in a subprocess with a time limit and a fresh database |
+| Release checks | `workbench/release_checks.py` | Starts the generated app, compares it with its contract, times it against the requirements, scans it for security mistakes |
+| Export | `workbench/export.py` | A Markdown project report and a zip of the generated project |
 | Requirements | `workbench/requirements.py` | Non-functional requirements and the rule-based backlog quality check |
 | Metrics | `workbench/metrics.py` | GQM metrics, burndown and traceability details, computed from the event log and the project's records |
 | Data layer | `workbench/db/` | SQLAlchemy models, sessions, query helpers |
@@ -42,7 +44,10 @@ flowchart LR
 
 The web UI (`frontend/`, React + Vite) has a project list, the backlog, the sprint board, a live
 activity feed, an approval inbox, a traceability matrix and a Results page, and drives the phases
-through the REST API. The API streams the event log to clients as Server-Sent Events.
+through the REST API. The API streams the event log to clients as Server-Sent Events. With
+`WORKBENCH_API_TOKEN` set, every endpoint except `/health` needs a bearer token (or `?token=` for the
+event stream) and the UI asks for it once; without it the API is open, so run it locally or behind
+an SSH tunnel.
 
 ## LLM client
 Every agent calls `LLMClient.complete_json(system, user, schema, ...)` and gets back a validated
@@ -93,7 +98,7 @@ steps.
 | Phase | Agents |
 |---|---|
 | backlog | product_owner, architect |
-| sprint_planning (gate) | scrum_master |
+| sprint_planning (gate) | product_owner (refinement), scrum_master |
 | execution | architect, developer, qa |
 | review (gate) | scrum_master |
 | retro | scrum_master |
@@ -128,6 +133,11 @@ sequenceDiagram
   Q-->>Q: story done when its tasks are done
 ```
 
+The Architect, QA and the Developer also tell each other on the event bus (`agent_message`: a
+contract is published, a bug needs fixing, a fix was tried, a test was corrected), and the activity
+feed shows it as "Told the Developer: ...". The messages are structured notifications, not free-form
+chat.
+
 A story is done when all its tasks are done. Only the Developer (on a commit) and QA (when the
 tests pass) close tasks, so the Scrum Master may assign tasks only to `developer` and `qa`, and
 every story gets one task for each.
@@ -138,6 +148,7 @@ so they hold whatever the model answers.
 
 | Guard | What it stops | Where |
 |---|---|---|
+| Example request | The Developer and QA disagreeing on field names: every request body in the contract has one concrete `example` that both must follow | `contract.example_body` |
 | Structured API contract | An empty or free-form spec. The Architect returns endpoints (method, path, request fields, status codes) that are rendered into the spec | `contract.render`, `schemas.EndpointOut` |
 | Contract check | A route the contract names that the code lacks, or a wrong success status, found by reading the routes in `app/*.py`. Becomes a bug for the Developer | `contract.violations`, QA |
 | Route guard | A rewrite of `main.py` that drops endpoints other stories use. The answer is refused and the Developer retries (up to two more times) with the removed endpoints named. A route moved behind a router prefix is not a removal | `contract.lost`, Developer |
@@ -160,6 +171,33 @@ cannot produce an empty or stuck sprint:
 - One retrospective may lower the capacity by at most **30%**.
 - A carried-over story gets its fix attempts **reset** when it is planned again. The Developer's
   prompt says how many earlier attempts failed and asks for a different approach.
+
+## Backlog refinement
+Before each sprint is planned the Product Owner refines the backlog (the first agent of the
+`sprint_planning` phase). A rule-based check finds the stories that are not in a sprint and are
+flawed (no Given/When/Then criteria, fewer than two, points off the scale or above 8, vague wording).
+With nothing flagged there is no model call (`refinement_skipped`). Otherwise the model rewrites the
+criteria, points and priority of the flagged stories only; the code ignores any other story it
+returns, and runs the check again. See docs/agents.md.
+
+## Release checks
+When a sprint is released with a real model, `ReleaseAgent` looks at the generated app as a whole:
+it starts `uvicorn app.main:app`, reads the OpenAPI document and compares it with the contract of
+the completed stories, times the list endpoints against any time limit in the non-functional
+requirements (a requirement without one is `unverified`) and scans `app/*.py` with the `ruff`
+security rules. Each check is a `release_check` event, a section of the release notes and a row on
+the Results page. A failed check is a finding, not a veto.
+
+## Maintenance
+A finished project takes a maintenance request (`POST /projects/{id}/maintenance`): the problem
+becomes a top-priority fix story in a `Maintenance` epic and the next step plans a maintenance sprint
+through the same phases as any other, with one extra sprint allowed past `MAX_SPRINTS` for each
+request while its fix waits.
+
+## Export
+`GET /projects/{id}/report` is a Markdown report of the project (requirements, backlog, every sprint
+and retrospective, releases and checks, open bugs) and `GET /projects/{id}/export` a zip of that report
+and the generated project, both built from the database and the sandbox repository.
 
 ## Process improvement loop
 Each sprint is one Plan-Do-Check-Act cycle. The retrospective turns measured results into typed
@@ -241,15 +279,21 @@ erDiagram
 ## Known limitations
 - **Live delivery is limited by the model.** On a local 14B model the library project delivered
   between 0 and 2 of 6 stories (0 to 5 of 19 points) in the latest runs. The agents and guards work,
-  but the Developer and QA still disagree on request shapes (a `422` where `201` was expected) often
-  enough to block stories. Run-to-run variation is large.
+  but a story completes only when all its tests pass, and the Developer and QA still sometimes
+  disagree about a request or a response. Run-to-run variation is large.
 - The Claude API path is covered in tests and mock mode but has not been run end to end; the live
   runs used Ollama.
 - The scripted demo is hand-written, not a model run. What is real in it is the generated code, the
   test runs, the git history and every number on the Results page.
-- Tests are API tests written by QA. There are no integration, end-to-end or UI tests, and the
-  non-functional requirements are written and designed for but not verified.
-- The DevOps agent writes a Dockerfile and a CI workflow, but the image is built only where Docker is
-  usable (it is skipped without Docker and failed on the test server for lack of permission).
-- There is no maintenance flow after a release, and no backlog refinement event.
-- There is no authentication. Run it locally or behind an SSH tunnel.
+- Tests are API tests written by QA, plus the release checks (the app starts and serves its
+  contract). There are no end-to-end or UI tests. Only a non-functional requirement that states a
+  time limit is verified; the others are reported as unverified.
+- Backlog refinement is rule-triggered: it runs when the backlog check flags a story, and it has not
+  been exercised on a live model yet (the live backlogs were clean).
+- The DevOps agent writes a Dockerfile and a CI workflow, but the image is built only where Docker
+  is usable (it is skipped without Docker and failed on the test server for lack of permission). The
+  release checks start the app directly, so they do not depend on Docker.
+- Maintenance is a request that becomes a story and a sprint; there is no hotfix path that skips
+  the sprint, and nothing monitors the released product.
+- The optional API token is one shared secret kept in the browser. It keeps casual users out; it is
+  not a user system, and it needs HTTPS or a tunnel on a shared network.

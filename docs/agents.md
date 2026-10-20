@@ -121,6 +121,9 @@ AGENTS["product_owner"] = ProductOwnerAgent()
 | `record_fix_attempt(bug_id, fixed)` | Count a Developer fix attempt; `fixed` marks the bug fixed |
 | `reopen_bug(bug_id)` | QA re-tested a bug the Developer called fixed and it still fails |
 | `verify_bug(bug_id)` | QA re-tested the story and the bug no longer reproduces |
+| `message(to, subject, body, **payload)` | Tell another agent something, as an `agent_message` event (see "Messages between agents") |
+| `refine_story(story_id, **fields)` | Change fields of a backlog story; logs `story_refined` with `{field: [old, new]}`, returns `None` when nothing changed |
+| `reset_bug_attempts(story_id)` | Give the open bugs of a story a fresh set of fix attempts (`bug_attempts_reset`) |
 | `log(kind, message, **payload)` | Add a custom event |
 
 ## Testing an agent
@@ -241,6 +244,11 @@ against the same contract. `contract.violations` checks the code by rules: the r
 `app/*.py` against the contract, ignoring router prefixes. It runs in live mode only, because the mock
 Developer writes no routes.
 
+A request body in the contract carries one concrete `example` (`contract.example_body`: `str` is
+`"text"`, `int` is `1`, `float` is `1.5`, `bool` is `true`). Both prompts say a request has exactly
+the fields of its example, so the Developer and QA stop disagreeing on field names, which was the
+cause of most `422` responses where `201` was expected.
+
 Every run logs a `test_run` event (`passed`, `failed`, `ok`) for the metrics views.
 `QAAgent(developer=None)` only reports bugs and never reruns the Developer.
 
@@ -261,6 +269,39 @@ sequenceDiagram
 
 In that flow the QA prompt says "There is no implementation yet" and lists the story's design and
 API spec instead of the code.
+
+## Backlog refinement
+Refinement is a step of the sprint planning phase: `PHASE_AGENTS["sprint_planning"]` is
+`product_owner, scrum_master`. `ProductOwnerAgent.run` writes the backlog in the backlog phase and
+hands over to `BacklogRefiner` in sprint planning. The refiner looks at the stories that are not in
+a sprint, with the problems the rule-based backlog check found in them (`story_problems`), and:
+
+- **calls no model** when there is nothing to fix (`refinement_skipped`), so a clean backlog costs
+  nothing;
+- otherwise asks for `RefinementOutput`: for each story to change, the whole set of
+  `acceptance_criteria` (2 to 4 Given/When/Then strings), `points` (1, 2, 3, 5 or 8) and `priority`;
+- **applies only the stories the check flagged**, so the model cannot change a good story or one
+  that is already in a sprint. Each change is a `story_refined` event with `{field: [old, new]}`,
+  the result is a `backlog_refined` event (problems before and after) and the check is run again
+  (`backlog_validated`), which the Backlog page shows.
+
+The mock refiner is deterministic: it keeps the criteria that are already in Given/When/Then form,
+adds a generic pair when fewer than two are left, and rounds the points to the scale, at most 8.
+
+## Messages between agents
+The agents do not call each other freely. Where they depend on one another they tell each other on
+the event bus, and the activity feed shows it as "Told the Developer: ...". `Tools.message(to,
+subject, body)` logs an `agent_message` event from the sending agent (`payload.to` is the receiver's
+role):
+
+| From | To | When |
+|---|---|---|
+| Architect | Developer, QA | a story's API contract is published |
+| QA | Developer | a bug is filed ("Please fix bug #n"), or QA corrected a test |
+| Developer | QA | a fix attempt ended ("a fix is committed" or "I could not fix it") |
+
+These are structured notifications, not free-form chat: nothing is lost, nothing is read back by an
+agent, and the call that makes the Developer fix a bug stays a direct call from QA.
 
 ## DevOps agent
 `DevOpsAgent` (`workbench/agents/devops.py`) runs in the release phase after QA and the review
@@ -301,6 +342,31 @@ tag, or all of them for `v0.1.0`).
   changes nothing. With no sprint the step logs `release_skipped`.
 - The agent logs `agent_started` / `agent_finished` itself (`llm_mode` is `none`, zero usage) so
   it shows in the activity feed without counting as an LLM call.
+
+### Release checks
+When a sprint is released with a real model, `ReleaseAgent` checks the generated app as a whole
+(`workbench/release_checks.py`), the way a deployment would. QA tests the stories one by one; these
+look at the app. A mock run skips them (the mock Developer's app does not serve the mock contract).
+
+| Check | How | Result |
+|---|---|---|
+| starts | `uvicorn app.main:app` is started in the workspace and its OpenAPI document is read | `passed` or `failed` with the last lines of the error |
+| serves its contract | the endpoints of the sprint's completed stories against the OpenAPI paths (a router prefix is tolerated) | `passed`, `failed` (`not served: GET /loans`) or `skipped` |
+| a requirement | the list endpoints are timed (10 requests each) and the p95 is compared with a time limit in the requirement or its measure (`300 ms`, `500 milliseconds`, `2 seconds`) | `met`, `not met`, or `unverified` (no time limit in it, or the app has no list endpoint to time) |
+| security scan | `ruff` security rules (`S102 S105 S106 S107 S301 S307 S324 S506 S608`) over `app/*.py`: exec and eval, hard-coded passwords, pickle, unsafe YAML, weak hashes, SQL built from strings | `passed` or `failed` with the first findings |
+
+Each check is a `release_check` event, a section "Release checks" of the release notes and a row of
+`GET /projects/{id}/release-checks`; the Results page shows them. A failed check is a finding, not a
+veto: the release is made either way.
+
+## Maintenance after the release
+A finished project takes a maintenance request: `Orchestrator.request_maintenance(project_id, title,
+description, points)` (`POST /projects/{id}/maintenance`). It adds a top-priority story `Fix: <title>`
+with two Given/When/Then criteria to a `Maintenance` epic, logs `maintenance_requested` and moves the
+project back to `release`, so the next step plans a maintenance sprint like any other: the planner,
+the Developer, QA, the review, the retrospective and a new release. `more_sprints` allows it past
+`MAX_SPRINTS` while a fix waits, one extra sprint for each request, so a fix that never passes cannot
+loop forever.
 
 ## Agents that run in several phases
 The Scrum Master runs in sprint planning, review and retro, and each needs a different prompt and
