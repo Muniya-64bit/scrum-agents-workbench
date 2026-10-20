@@ -2614,3 +2614,12 @@ details[open] > .story-summary::before {
 .sprint-row td {
   border-bottom: 0;
 }
+
+/* The row spans the whole (scrollable) table; keep its text in view and let it wrap */
+.activity-text {
+  position: sticky;
+  left: 12px;
+  width: max-content;
+  max-width: min(72ch, calc(100vw - 80px));
+  white-space: normal;
+}

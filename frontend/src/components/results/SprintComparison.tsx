@@ -89,14 +89,16 @@ function ActivityRow({ sprint }: { sprint: SprintMetrics }) {
   return (
     <tr className="activity-row">
       <td colSpan={6}>
-        <p>
-          <strong>What happened:</strong> {sprintActivity(sprint).join(" · ")}.
-        </p>
-        {why && (
+        <div className="activity-text">
           <p>
-            <strong>Not completed because:</strong> {why}.
+            <strong>What happened:</strong> {sprintActivity(sprint).join(" · ")}.
           </p>
-        )}
+          {why && (
+            <p>
+              <strong>Not completed because:</strong> {why}.
+            </p>
+          )}
+        </div>
       </td>
     </tr>
   );
