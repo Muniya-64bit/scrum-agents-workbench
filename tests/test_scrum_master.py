@@ -66,8 +66,63 @@ def test_planning_ignores_bad_llm_choices(db: Session, project: m.Project, monke
     ScrumMasterAgent(llm).run(db, project.id, {**PLANNING, "capacity": 3})
     sprint = repo.current_sprint(db, project.id)
     assert [s.id for s in sprint.stories] == [first.id]
-    # unknown assignee falls back to developer; the story still gets its task
-    assert [(t.title, t.assignee) for t in sprint.stories[0].tasks] == [("T", "developer")]
+    # an unknown assignee falls back to developer, and the story gets the QA task it lacks
+    assert [(t.title, t.assignee) for t in sprint.stories[0].tasks] == [
+        ("T", "developer"), (f"Test: {first.title}", "qa")]
+
+
+CLOSERS = {"developer", "qa"}  # the only agents that ever mark a task done
+
+
+def _plan_with_tasks(db: Session, project: m.Project, monkeypatch,
+                     tasks: list[dict]) -> list[m.Task]:
+    first = repo.backlog(db, project.id)[0]
+    reply = json.dumps({"goal": "G", "story_ids": [first.id],
+                        "tasks": [{"story_id": first.id, **t} for t in tasks]})
+    llm = LLMClient(mock=False, use_cache=False)
+    monkeypatch.setattr(llm, "_call", lambda system, prompt, stats: reply)
+    ScrumMasterAgent(llm).run(db, project.id, {**PLANNING, "capacity": 3})
+    return repo.current_sprint(db, project.id).stories[0].tasks
+
+
+@pytest.mark.parametrize("role", ["architect", "product_owner", "scrum_master", "devops", "wizard"])
+def test_no_story_is_planned_with_a_task_nobody_closes(db: Session, project: m.Project,
+                                                       monkeypatch, role: str):
+    """Live runs had tasks for the architect or product owner that stayed `todo` forever, so
+    their stories could never be completed."""
+    tasks = _plan_with_tasks(db, project, monkeypatch, [
+        {"title": "Design it", "assignee": role}, {"title": "Build it", "assignee": "developer"},
+        {"title": "Check it", "assignee": "qa"}])
+    assert {t.assignee for t in tasks} == CLOSERS
+    assert [t.title for t in tasks if t.title == "Design it"] == ["Design it"]  # kept, reassigned
+
+
+def test_a_story_always_has_a_developer_task_and_a_qa_task(db: Session, project: m.Project,
+                                                           monkeypatch):
+    only_qa = _plan_with_tasks(db, project, monkeypatch, [{"title": "Check", "assignee": "qa"}])
+    assert sorted(t.assignee for t in only_qa) == ["developer", "qa"]
+
+
+def test_a_developer_only_story_gets_a_qa_task_so_it_cannot_finish_untested(
+        db: Session, project: m.Project, monkeypatch):
+    tasks = _plan_with_tasks(db, project, monkeypatch,
+                             [{"title": "Build", "assignee": "developer"}])
+    assert sorted(t.assignee for t in tasks) == ["developer", "qa"]
+
+
+def test_the_planner_prompt_names_only_the_roles_that_close_tasks():
+    prompt = SprintPlanner.system_prompt
+    assert "assignee must be developer or qa" in prompt
+    assert "architect" not in prompt.split("assignee")[1].split("\n- ")[0]
+
+
+def test_every_planned_story_can_be_completed(db: Session, project: m.Project):
+    """With the mock planner every story gets a task for each of the two agents that close tasks."""
+    ScrumMasterAgent().run(db, project.id, PLANNING)
+    planned = repo.current_sprint(db, project.id).stories
+    assert planned
+    for story in planned:
+        assert {t.assignee for t in story.tasks} == CLOSERS
 
 
 def test_story_without_tasks_gets_default_tasks(db: Session, project: m.Project, monkeypatch):

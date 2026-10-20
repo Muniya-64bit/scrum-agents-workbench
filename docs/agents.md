@@ -186,6 +186,14 @@ sprint story that has code it:
    (`MAX_FIX_RETRIES`, 3, by default) attempts per bug. A bug the Developer marked fixed that
    still fails is reopened; after the limit it stays open for a human.
 
+### Tasks nobody can close
+A story is done only when all its tasks are done, and only the Developer (on a commit) and QA (when
+the tests pass) ever mark a task done. The sprint planner may assign tasks only to `developer` and
+`qa`; any other role is mapped to `developer`, and a story without a developer task or without a
+QA task gets a default one (`Implement: ...`, `Test: ...`). Live runs once had tasks for the
+architect, product owner or devops that stayed `todo` forever, so those stories could never be
+completed however good the code was.
+
 ### Guards on the Developer's code
 - **Tables at import time.** The Developer is told to create SQLite tables with
   `CREATE TABLE IF NOT EXISTS` in a function it also calls at module level. A live run had them
