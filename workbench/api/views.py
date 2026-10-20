@@ -169,6 +169,16 @@ class ReleaseView(BaseModel):
     sha: str
 
 
+class ReleaseCheckView(BaseModel):
+    """One check made when a sprint was released (see `workbench/release_checks.py`)."""
+
+    version: str
+    sprint_id: int | None
+    name: str
+    status: str  # passed | failed | skipped | met | not met | unverified
+    detail: str
+
+
 class ProcessView(BaseModel):
     """The levers of the current sprint and what the last retrospective changes for the next."""
 

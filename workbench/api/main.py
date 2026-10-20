@@ -24,6 +24,7 @@ from workbench.api.views import (
     ProcessView,
     ProjectMetricsView,
     ProjectView,
+    ReleaseCheckView,
     ReleaseView,
     SprintDetailView,
     SprintView,
@@ -247,6 +248,17 @@ def releases(project_id: int, db: Session = Depends(get_session)):
             created_at=art.created_at if art else e.created_at,
             story_ids=p.get("story_ids") or [], sha=p.get("sha") or ""))
     return out
+
+
+@app.get("/projects/{project_id}/release-checks", response_model=list[ReleaseCheckView])
+def release_check_list(project_id: int, db: Session = Depends(get_session)):
+    """The checks of every release (app starts, serves its contract, requirements, security),
+    oldest release first. Empty for runs that do not make them (mock mode)."""
+    _proj(db, project_id)
+    return [ReleaseCheckView(version=e.payload.get("version", ""),
+                             sprint_id=e.payload.get("sprint_id"), name=e.payload.get("name", ""),
+                             status=e.payload.get("status", ""), detail=e.payload.get("detail", ""))
+            for e in repo.events_since(db, project_id) if e.kind == "release_check"]
 
 
 @app.get("/projects/{project_id}/process", response_model=ProcessView)

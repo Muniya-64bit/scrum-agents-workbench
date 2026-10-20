@@ -19,7 +19,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from workbench import config, metrics
+from workbench import config, contract, metrics, release_checks, requirements
 from workbench.agents.base import BaseAgent
 from workbench.agents.tools import Tools
 from workbench.db import models as m
@@ -34,7 +34,7 @@ def _pct(ratio: float | None) -> str:
 
 
 def release_notes(db: Session, project_id: int, sprint: m.Sprint, version: str,
-                  ws: Workspace) -> str:
+                  ws: Workspace, checks: list[release_checks.Check] | None = None) -> str:
     """Markdown release notes for one sprint. Pure: everything comes from the database and the
     sandbox repository's history."""
     project = repo.get(db, m.Project, project_id)
@@ -75,7 +75,12 @@ def release_notes(db: Session, project_id: int, sprint: m.Sprint, version: str,
               f"- Commitment reliability: {_pct(sm['commitment_reliability'])}",
               f"- First-pass yield: {_pct(sm['first_pass_yield'])}",
               f"- Test pass rate: {_pct(sm['test_pass_rate'])}",
-              "", "## Commits"]
+              ]
+    if checks:
+        lines += ["", "## Release checks"]
+        lines += [f"- {c.name}: {c.status}" + (f" ({c.detail})" if c.detail else "")
+                  for c in checks]
+    lines += ["", "## Commits"]
     lines += [f"- {subject}" for subject in ws.log_since(previous)] or ["- None"]
     return "\n".join(lines) + "\n"
 
@@ -107,6 +112,33 @@ class ReleaseAgent(BaseAgent):
                   model="", llm_mode="none", story_id=None)
         return CodeOutput(summary=summary)
 
+    def _checks(self, db: Session, project_id: int, tools: Tools, sprint: m.Sprint,
+                ws: Workspace, version: str) -> list[release_checks.Check]:
+        """Start the generated app, compare it with the contract, check the non-functional
+        requirements and scan for security mistakes. Live runs only: the mock Developer's app
+        does not serve the mock contract."""
+        if config.MOCK_LLM:
+            return []
+        plan = metrics.sprint_plan(db, sprint)
+        done = [s for sid in plan["story_ids"] if (s := repo.get(db, m.UserStory, sid))
+                and repo.story_is_done(s)]
+        endpoints = [e for s in done for e in contract.for_story(db, project_id, s.id)[1]]
+        p95 = None
+        if (ws.path / "app" / "main.py").is_file():
+            checks, p95 = release_checks.smoke_test(ws.path, endpoints)
+        else:
+            checks = [release_checks.Check("starts", "skipped", "no app was generated")]
+        checks += release_checks.check_nfrs(requirements.nfrs(db, project_id), p95)
+        findings = release_checks.security_scan(ws.path)
+        checks.append(release_checks.Check(
+            "security scan", "failed" if findings else "passed",
+            f"{len(findings)} finding(s): " + "; ".join(findings[:3]) if findings
+            else "no common security mistakes found"))
+        for c in checks:
+            tools.log("release_check", f"{c.name}: {c.status}", name=c.name, status=c.status,
+                      detail=c.detail, version=version, sprint_id=sprint.id)
+        return checks
+
     def _release(self, db: Session, project_id: int, tools: Tools, task: dict) -> str:
         sprint = repo.current_sprint(db, project_id)
         if sprint is None:
@@ -120,7 +152,8 @@ class ReleaseAgent(BaseAgent):
         if self.builder is not None:
             self.builder.run(db, project_id, {**task, "version": version, "sprint_id": sprint.id})
         ws = Workspace(project_id, self.workspaces_dir).init()
-        notes = release_notes(db, project_id, sprint, version, ws)
+        checks = self._checks(db, project_id, tools, sprint, ws, version)
+        notes = release_notes(db, project_id, sprint, version, ws, checks)
         ws.write(f"releases/{version}.md", notes)
         sha = ws.commit(f"Release {version}") or ws.head()
         ws.tag(version, f"Release {version}")

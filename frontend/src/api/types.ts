@@ -327,6 +327,16 @@ export interface Release {
   sha: string;
 }
 
+/** One check made when a sprint was released: the app starts, serves its contract, a requirement
+ *  is met, the security scan. */
+export interface ReleaseCheck {
+  version: string;
+  sprint_id: number | null;
+  name: string;
+  status: "passed" | "failed" | "skipped" | "met" | "not met" | "unverified";
+  detail: string;
+}
+
 /** The process levers (docs/agents.md, "Retrospective and process levers"). */
 export interface ProcessConfig {
   capacity: number;

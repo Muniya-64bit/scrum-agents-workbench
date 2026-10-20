@@ -3,6 +3,7 @@ import { CostSection } from "../components/results/CostSection";
 import { GqmSection } from "../components/results/GqmSection";
 import { OutcomeSummary } from "../components/results/OutcomeSummary";
 import { QualityTable } from "../components/results/QualityTable";
+import { ReleaseChecks } from "../components/results/ReleaseChecks";
 import { SprintComparison } from "../components/results/SprintComparison";
 import { SprintDetail } from "../components/results/SprintDetail";
 import { IconChart } from "../components/icons";
@@ -17,6 +18,7 @@ const SECTIONS = [
   { id: "detail", label: "Sprint detail" },
   { id: "quality", label: "Quality" },
   { id: "cost", label: "Cost" },
+  { id: "checks", label: "Release checks" },
   { id: "releases", label: "Releases" },
   { id: "improvement", label: "Improvement" },
   { id: "method", label: "Method" },
@@ -54,6 +56,7 @@ export function MetricsPage() {
       <SprintDetail data={data} version={version} />
       <QualityTable sprints={data.sprints} gqm={data.gqm} />
       <CostSection data={data} />
+      <ReleaseChecks projectId={project.id} version={version} />
       <ReleasesPanel projectId={project.id} version={version} />
       <PdcaPanel projectId={project.id} version={version} />
       <GqmSection gqm={data.gqm} />

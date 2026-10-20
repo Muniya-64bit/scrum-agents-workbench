@@ -8,6 +8,7 @@ import type {
   Project,
   ProjectMetrics,
   Release,
+  ReleaseCheck,
   Sprint,
   SprintDetail,
   Task,
@@ -82,6 +83,7 @@ export const api = {
   traceability: (id: number) => request<TraceRow[]>(`/projects/${id}/traceability`),
   artifact: (artifactId: number) => request<Artifact>(`/artifacts/${artifactId}`),
   releases: (id: number) => request<Release[]>(`/projects/${id}/releases`),
+  releaseChecks: (id: number) => request<ReleaseCheck[]>(`/projects/${id}/release-checks`),
   process: (id: number) => request<ProcessInfo>(`/projects/${id}/process`),
   improvement: (id: number) => request<ImprovementRow[]>(`/projects/${id}/improvement`),
 };

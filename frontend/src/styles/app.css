@@ -2623,3 +2623,13 @@ details[open] > .story-summary::before {
   max-width: min(72ch, calc(100vw - 80px));
   white-space: normal;
 }
+
+.check-caption {
+  padding: 8px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
