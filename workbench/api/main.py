@@ -20,6 +20,7 @@ from workbench.api.views import (
     EpicView,
     EventView,
     ImprovementRow,
+    MaintenanceIn,
     NfrView,
     ProcessView,
     ProjectMetricsView,
@@ -140,6 +141,18 @@ def approve(project_id: int, approved: bool = True, comment: str = "",
     _proj(db, project_id)
     try:
         return _view(db, Orchestrator(db, AGENTS).approve(project_id, approved, comment))
+    except RuntimeError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@app.post("/projects/{project_id}/maintenance", response_model=ProjectView)
+def request_maintenance(project_id: int, body: MaintenanceIn, db: Session = Depends(get_session)):
+    """Report a problem found after the release. It becomes a top-priority fix story, and the next
+    `advance` plans a maintenance sprint. 409 unless the project is finished."""
+    _proj(db, project_id)
+    try:
+        return _view(db, Orchestrator(db, AGENTS).request_maintenance(
+            project_id, body.title, body.description, body.points))
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
 

@@ -62,6 +62,8 @@ export const api = {
   getProject: (id: number) => request<Project>(`/projects/${id}`),
   createProject: (name: string, idea: string) =>
     request<Project>("/projects", { method: "POST", body: JSON.stringify({ name, idea }) }),
+  requestMaintenance: (id: number, body: { title: string; description: string; points: number }) =>
+    request<Project>(`/projects/${id}/maintenance`, { method: "POST", body: JSON.stringify(body) }),
   advance: (id: number) => request<Project>(`/projects/${id}/advance`, { method: "POST" }),
   approve: (id: number, approved: boolean, comment = "") =>
     request<Project>(

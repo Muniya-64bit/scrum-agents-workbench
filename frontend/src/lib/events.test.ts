@@ -30,6 +30,7 @@ describe("describeEvent", () => {
     ],
     [ev("backlog_refined", "1 stories refined: 4 problem(s) before, 0 after", { after: 0 }), "1 stories refined: 4 problem(s) before, 0 after", "done"],
     [ev("backlog_refined", "1 stories refined: 4 problem(s) before, 2 after", { after: 2 }), "1 stories refined: 4 problem(s) before, 2 after", "testing"],
+    [ev("maintenance_requested", "Empty title is accepted"), "Reported a problem after the release: “Empty title is accepted”", "testing"],
     [ev("refinement_skipped", "Nothing to refine: the backlog check found no problems"), "Nothing to refine: the backlog check found no problems", "neutral"],
     [ev("agent_message", "Please fix bug #4", { to: "developer" }), "Told the Developer: Please fix bug #4", "accent"],
     [ev("tests_revised", "Story #3: Add"), "QA rewrote its tests after a mistake in the test code: Story #3: Add", "accent"],

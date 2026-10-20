@@ -110,6 +110,8 @@ export function describeEvent(e: ActivityEvent): { text: string; tone: EventTone
       return { text: `Rejected a file with an unsafe or disallowed path: ${m}`, tone: "danger" };
     case "tests_missing":
       return { text: `${m}: QA wrote no usable test file`, tone: "danger" };
+    case "maintenance_requested":
+      return { text: `Reported a problem after the release: ${q(m)}`, tone: "testing" };
     case "story_refined": {
       const changes = (e.payload.changes ?? {}) as Record<string, [unknown, unknown]>;
       const parts = Object.entries(changes).map(([field, [from, to]]) =>

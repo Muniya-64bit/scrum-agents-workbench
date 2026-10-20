@@ -4,7 +4,7 @@ which the frontend uses as its contract."""
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 TaskStatus = Literal["todo", "doing", "testing", "done"]
 
@@ -24,6 +24,14 @@ class ProjectView(_ORM):
     has_more_sprints: bool = False
     # True after the human rejected the sprint plan: the next step plans the same sprint again
     replanning: bool = False
+
+
+class MaintenanceIn(BaseModel):
+    """A problem found after the release."""
+
+    title: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=3, max_length=1000)
+    points: Literal[1, 2, 3, 5] = 2
 
 
 class StoryView(_ORM):
