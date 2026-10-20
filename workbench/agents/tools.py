@@ -141,6 +141,18 @@ class Tools:
         self.log("bug_reopened", b.description, bug_id=b.id, story_id=b.story_id)
         return b
 
+    def reset_bug_attempts(self, story_id: int) -> int:
+        """Give the open bugs of a story a fresh set of fix attempts (it was planned into a new
+        sprint, or its test was corrected). Returns how many bugs were reset."""
+        reset = [b for b in repo.bugs(self.db, self.project_id, "open")
+                 if b.story_id == story_id and b.retries > 0]
+        for b in reset:
+            repo.update(self.db, b, retries=0)
+        if reset:
+            self.log("bug_attempts_reset", f"{len(reset)} bug(s) get a fresh set of attempts",
+                     story_id=story_id, bug_ids=[b.id for b in reset])
+        return len(reset)
+
     def verify_bug(self, bug_id: int) -> m.Bug:
         """QA re-tested the story and the bug no longer reproduces."""
         b = repo.update(self.db, repo.get(self.db, m.Bug, bug_id), status="fixed")

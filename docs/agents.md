@@ -186,6 +186,25 @@ sprint story that has code it:
    (`MAX_FIX_RETRIES`, 3, by default) attempts per bug. A bug the Developer marked fixed that
    still fails is reopened; after the limit it stays open for a human.
 
+### Getting unstuck
+A live run had one story that could not pass. It took sprints 2 and 3, the retrospective halved the
+capacity, and four of six stories were never started. Four rules keep the team moving:
+
+- **QA corrects a wrong test.** When the Developer has failed twice on a test that runs (not a
+  crash), QA reviews the test once per run against the API contract. A test is wrong when it
+  asserts something the contract does not promise (the exact text of an error message, a status
+  or a field it does not name). A corrected test (`tests_corrected`) gives the bug a fresh set of
+  attempts; a right test is returned unchanged (`tests_review_unchanged`).
+- **A stuck story is parked.** A story carried over twice with a bug still open is *blocked*: the
+  planner plans it after other work and marks it `(blocked)` in the prompt.
+- **Spare capacity is filled.** After the model's picks (blocked stories removed) the sprint is
+  topped up by priority until the capacity is full, and blocked stories are added only if room is
+  left. A sprint whose plan the human rejected is not topped up.
+- **A capacity cut is gentle.** One retrospective may lower the capacity by at most 30%.
+- **Fresh attempts.** A carried-over story gets its fix attempts reset when it is planned again
+  (`bug_attempts_reset`). The Developer's prompt says how many earlier attempts failed and asks
+  for a different approach, so a reset does not repeat the same answer.
+
 ### Tasks nobody can close
 A story is done only when all its tasks are done, and only the Developer (on a commit) and QA (when
 the tests pass) ever mark a task done. The sprint planner may assign tasks only to `developer` and

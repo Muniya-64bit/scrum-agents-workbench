@@ -311,8 +311,9 @@ def test_developer_fixes_bug_and_qa_confirms(db: Session, project: m.Project, co
 
 def test_gives_up_after_max_retries(db: Session, project: m.Project, coded: m.UserStory,
                                     monkeypatch):
-    """The mock Developer never changes the behaviour, so the bug cannot be fixed."""
-    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "WRONG"))
+    """The mock Developer never changes the behaviour, so the bug cannot be fixed. After two
+    failed attempts QA doubts its test and the model returns the same file: the test is right."""
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "WRONG"), _tests_reply(coded, "WRONG"))
     QAAgent(qa_llm, developer=DeveloperAgent()).run(db, project.id, EXECUTION)
 
     (bug,) = repo.bugs(db, project.id)
@@ -320,19 +321,50 @@ def test_gives_up_after_max_retries(db: Session, project: m.Project, coded: m.Us
     kinds = _kinds(db, project.id)
     assert kinds.count("test_run") == MAX_FIX_RETRIES + 1
     assert "bugs_left_open" in kinds and "bug_reopened" in kinds  # claimed fixed, still failing
+    assert "tests_review_unchanged" in kinds and "tests_corrected" not in kinds
     db.refresh(coded)
     assert next(t for t in coded.tasks if t.assignee == "qa").status == "testing"
 
 
 def test_exhausted_bug_is_not_retried_on_a_later_run(db: Session, project: m.Project,
                                                      coded: m.UserStory, monkeypatch):
-    qa = QAAgent(_fake_llm(monkeypatch, _tests_reply(coded, "WRONG")),
+    qa = QAAgent(_fake_llm(monkeypatch, _tests_reply(coded, "WRONG"), _tests_reply(coded, "WRONG")),
                  developer=DeveloperAgent())
     qa.run(db, project.id, EXECUTION)
     before = len(Workspace(project.id).history())
     qa.run(db, project.id, EXECUTION)
     assert "tests_skipped" in _kinds(db, project.id)
     assert len(Workspace(project.id).history()) == before
+
+
+def test_a_wrong_test_is_corrected_after_two_failed_developer_attempts(
+        db: Session, project: m.Project, coded: m.UserStory, monkeypatch):
+    """The test asserts something the code never does. The Developer fails twice; QA then
+    checks the test against the contract, corrects it, and the bug gets fresh attempts."""
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "WRONG"),
+                       _tests_reply(coded, "Create an item"))
+    QAAgent(qa_llm, developer=DeveloperAgent()).run(db, project.id, EXECUTION)
+
+    events = repo.events_since(db, project.id)
+    kinds = [e.kind for e in events]
+    assert kinds.count("tests_corrected") == 1 and "bug_attempts_reset" in kinds
+    # the Developer tried exactly twice before QA doubted the test
+    assert len([k for k in kinds if k.startswith("bug_fix")]) == 2
+    runs = [e.payload["ok"] for e in events if e.kind == "test_run"]
+    assert runs == [False, False, False, True]  # the third run is when QA doubts its test
+    assert "bug_verified" in kinds
+    db.refresh(coded)
+    assert next(t for t in coded.tasks if t.assignee == "qa").status == "done"
+    assert "tried twice" in qa_llm.last_prompt
+    assert "exact text of an error message" in qa_llm.last_prompt
+
+
+def test_qa_does_not_doubt_a_test_before_the_developer_failed_twice(
+        db: Session, project: m.Project, coded: m.UserStory, monkeypatch):
+    qa_llm = _fake_llm(monkeypatch, _tests_reply(coded, "Create an item"))
+    QAAgent(qa_llm, developer=DeveloperAgent()).run(db, project.id, EXECUTION)
+    assert "tests_corrected" not in _kinds(db, project.id)
+    assert "tests_review_unchanged" not in _kinds(db, project.id)
 
 
 # --- wiring ----------------------------------------------------------------------------------

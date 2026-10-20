@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 
 from workbench.agents.product_owner import ProductOwnerAgent
 from workbench.agents.registry import AGENTS
-from workbench.agents.scrum_master import ScrumMasterAgent, SprintPlanner
+from workbench.agents.scrum_master import (
+    ScrumMasterAgent,
+    SprintPlanner,
+    _blocked_ids,
+    plan_stories,
+)
 from workbench.agents.tools import Tools
 from workbench.db import models as m
 from workbench.db import repo
@@ -210,3 +215,119 @@ def test_full_flow_through_orchestrator(db: Session):
     kinds = [e.kind for e in repo.events_since(db, p.id)]
     for k in ("sprint_created", "standup", "burndown_snapshot", "retro_saved"):
         assert k in kinds
+
+
+# --- parking stuck stories, filling capacity, fresh attempts ---------------------------------
+
+
+def _story(t: Tools, epic_id: int, title: str, points: int, priority: int = 1) -> m.UserStory:
+    return t.create_story(epic_id, title=title, points=points, priority=priority)
+
+
+def _carry_over(db: Session, story: m.UserStory, times: int, retries: int = 3) -> m.Bug:
+    """A story that was carried over `times` times with a bug that used its attempts."""
+    t = Tools(db, story.epic.project_id, "scrum_master")
+    t.create_task(story.id, "Implement", "developer")
+    t.create_task(story.id, "Test", "qa")
+    for _ in range(times):
+        t.log("story_carried_over", story.title, story_id=story.id)
+    bug = Tools(db, story.epic.project_id, "qa").report_bug(story.id, "tests.x: broken")
+    return repo.update(db, bug, retries=retries)
+
+
+@pytest.fixture
+def backlog5(db: Session):
+    """A stuck 3-point story (P1) and three more stories: 3, 3 and 2 points."""
+    p = repo.create_project(db, "Library", "A library")
+    t = Tools(db, p.id, "product_owner")
+    epic = t.create_epic("Core")
+    stuck = _story(t, epic.id, "Add a Book", 3, 1)
+    rest = [_story(t, epic.id, "Borrow", 3, 2), _story(t, epic.id, "Return", 3, 2),
+            _story(t, epic.id, "Overdue", 2, 3)]
+    return p, stuck, rest
+
+
+def _titles(stories) -> list[str]:
+    return [s.title for s in stories]
+
+
+def test_spare_capacity_is_filled_from_the_backlog(db: Session, backlog5):
+    """A live sprint committed 3 of 5 points and left the rest empty."""
+    p, stuck, _ = backlog5
+    chosen = plan_stories(repo.unplanned_stories(db, p.id), [stuck.id], 8, set())
+    assert _titles(chosen) == ["Add a Book", "Borrow", "Overdue"]  # 3 + 3 + 2; Return would be 9
+    assert sum(s.points for s in chosen) <= 8
+
+
+def test_a_story_carried_over_twice_with_an_open_bug_is_blocked(db: Session, backlog5):
+    p, stuck, _ = backlog5
+    _carry_over(db, stuck, times=2)
+    assert _blocked_ids(db, p.id) == {stuck.id}
+
+
+@pytest.mark.parametrize("times", [0, 1])
+def test_a_story_is_not_blocked_before_its_second_carry_over(db: Session, backlog5, times: int):
+    p, stuck, _ = backlog5
+    _carry_over(db, stuck, times=times)
+    assert _blocked_ids(db, p.id) == set()
+
+
+def test_a_fixed_bug_does_not_block_a_story(db: Session, backlog5):
+    p, stuck, _ = backlog5
+    bug = _carry_over(db, stuck, times=3)
+    repo.update(db, bug, status="fixed")
+    assert _blocked_ids(db, p.id) == set()
+
+
+def test_a_blocked_story_is_planned_after_other_work(db: Session, backlog5):
+    """The stuck story used both of its sprints; the rest of the backlog moves first."""
+    p, stuck, _ = backlog5
+    _carry_over(db, stuck, times=2)
+    pool = repo.unplanned_stories(db, p.id)
+    blocked = _blocked_ids(db, p.id)
+    assert _titles(plan_stories(pool, [stuck.id], 5, blocked)) == ["Borrow", "Overdue"]
+    assert _titles(plan_stories(pool, [stuck.id], 8, blocked)) == ["Borrow", "Return", "Overdue"]
+    everything = _titles(plan_stories(pool, [stuck.id], 11, blocked))
+    assert everything[-1] == "Add a Book"  # last, not first
+
+
+def test_a_blocked_story_is_still_planned_when_nothing_else_is_left(db: Session):
+    p = repo.create_project(db, "Library", "A library")
+    t = Tools(db, p.id, "product_owner")
+    only = _story(t, t.create_epic("Core").id, "Add a Book", 3)
+    _carry_over(db, only, times=2)
+    assert _titles(plan_stories(repo.unplanned_stories(db, p.id), [only.id], 5,
+                                _blocked_ids(db, p.id))) == ["Add a Book"]
+
+
+def test_a_rejected_plan_is_not_topped_up(db: Session, backlog5):
+    p, stuck, _ = backlog5
+    chosen = plan_stories(repo.unplanned_stories(db, p.id), [stuck.id], 11, set(), fill=False)
+    assert _titles(chosen) == ["Add a Book"]  # the human asked for less
+
+
+def test_the_planner_prompt_marks_blocked_stories(db: Session, backlog5):
+    p, stuck, _ = backlog5
+    _carry_over(db, stuck, times=2)
+    prompt = SprintPlanner().build_prompt(db, p.id, PLANNING)
+    assert f"{stuck.id} | 1 | 3 | Add a Book (carried over) (blocked)" in prompt
+    assert "marked (blocked)" in SprintPlanner.system_prompt
+
+
+def test_a_carried_over_story_gets_fresh_fix_attempts(db: Session, backlog5):
+    p, stuck, _ = backlog5
+    bug = _carry_over(db, stuck, times=1, retries=3)
+    ScrumMasterAgent().run(db, p.id, {**PLANNING, "capacity": 5})
+    db.refresh(bug)
+    assert bug.retries == 0 and bug.status == "open"
+    reset = [e for e in repo.events_since(db, p.id) if e.kind == "bug_attempts_reset"]
+    assert len(reset) == 1 and reset[0].payload["bug_ids"] == [bug.id]
+
+
+def test_a_story_that_was_not_carried_over_keeps_its_attempts(db: Session, backlog5):
+    p, stuck, _ = backlog5
+    t = Tools(db, p.id, "qa")
+    bug = repo.update(db, t.report_bug(stuck.id, "tests.x: broken"), retries=2)
+    ScrumMasterAgent().run(db, p.id, {**PLANNING, "capacity": 5})
+    db.refresh(bug)
+    assert bug.retries == 2  # no tasks yet: planned for the first time, nothing to reset

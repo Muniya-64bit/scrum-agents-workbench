@@ -273,6 +273,24 @@ def test_prompt_asks_for_tables_created_at_import():
     assert "CREATE TABLE IF NOT EXISTS" in SYSTEM_PROMPT and "module level" in SYSTEM_PROMPT
 
 
+def test_prompt_says_how_many_earlier_attempts_failed(db: Session, project: m.Project):
+    """After a reset the counter says attempt 1 again, but the model must not repeat itself."""
+    story = _story(db, project)
+    qa = Tools(db, project.id, "qa")
+    bug = qa.report_bug(story.id, "tests.x: broken")
+    first = DeveloperAgent().build_prompt(db, project.id, {**EXECUTION, "story_id": story.id})
+    assert "(attempt 1 of 3)" in first and "earlier attempts" not in first
+
+    dev = Tools(db, project.id, "developer")
+    dev.record_fix_attempt(bug.id, fixed=False)
+    dev.record_fix_attempt(bug.id, fixed=True)
+    qa.reopen_bug(bug.id)
+    qa.reset_bug_attempts(story.id)  # a new sprint: a fresh set of attempts
+    again = DeveloperAgent().build_prompt(db, project.id, {**EXECUTION, "story_id": story.id})
+    assert "(attempt 1 of 3; 2 earlier attempts did not make the test pass" in again
+    assert "change your approach" in again
+
+
 def test_story_id_task_builds_that_story_only(db: Session, project: m.Project):
     other = _story(db, project, "Delete an item")  # not in a sprint, but asked for directly
     DeveloperAgent().run(db, project.id, {**EXECUTION, "story_id": other.id})

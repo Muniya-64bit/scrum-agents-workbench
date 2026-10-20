@@ -8,6 +8,7 @@ This is the Check -> Act step of a PDCA cycle (see docs/architecture.md, "Proces
 loop"). No database column is involved: levers live in event payloads and the retro JSON.
 """
 
+import math
 import re
 
 from pydantic import BaseModel, ValidationError
@@ -19,6 +20,7 @@ from workbench.schemas import ProcessChanges
 
 CAPACITY_BOUNDS = (3, 40)
 RETRY_BOUNDS = (1, 5)
+MAX_CAPACITY_CUT = 0.3  # one retrospective may lower the capacity by at most this share
 MAX_GUIDELINES = 5
 GUIDELINE_CHARS = 200
 TEST_FIRST_GUIDELINE = "Write the acceptance tests first and make them pass before committing"
@@ -47,7 +49,10 @@ class ProcessConfig(BaseModel):
         """Return the new configuration and the diff `{lever: [old, new]}` of changed levers."""
         new = self.model_copy(deep=True)
         if ch.capacity is not None:
-            new.capacity = _clamp(ch.capacity, CAPACITY_BOUNDS)
+            wanted = _clamp(ch.capacity, CAPACITY_BOUNDS)
+            # a weak sprint is no reason to stop the team: cut gently, not to a fraction
+            floor = max(CAPACITY_BOUNDS[0], math.ceil(self.capacity * (1 - MAX_CAPACITY_CUT)))
+            new.capacity = max(wanted, floor) if wanted < self.capacity else wanted
         if ch.max_fix_retries is not None:
             new.max_fix_retries = _clamp(ch.max_fix_retries, RETRY_BOUNDS)
         if ch.test_first is not None:
